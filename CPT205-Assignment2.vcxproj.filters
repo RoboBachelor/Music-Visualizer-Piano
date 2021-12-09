@@ -24,12 +24,21 @@
     <ClCompile Include="wav.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="miniaudio_test.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="miniaudio_test2.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="fft.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="wav.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="miniaudio.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

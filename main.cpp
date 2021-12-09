@@ -8,6 +8,8 @@
  * @email Jingyi.Wang1903@student.xjtlu.edu.cn
  */
 
+
+#define MINIAUDIO_IMPLEMENTATION
 #define FREEGLUT_STATIC
 #define PI 3.14159265358979323846
 
@@ -18,11 +20,12 @@
 #include <list>
 #include <ctime>
 
-#include "mmsystem.h"
+//#include "mmsystem.h"
 #include "fft.h"
 #include "wav.h"
+#include "miniaudio.h"
 
-#pragma comment(lib, "winmm.lib")
+//#pragma comment(lib, "winmm.lib")
 
 // Angles of rotation
 static GLfloat xRot = 0.0f;
@@ -34,7 +37,7 @@ clock_t beginClock;
 
 wav_t wav;
 
-complex values[N_FFT] = { 0.f, 0.f }, temp[N_FFT];
+std::complex<double> values[N_FFT] = { 0.f, 0.f };
 float mag[N_FFT] = { 0.f }, mag_smoothed[N_FFT] = { 0.f };
 float w_hanning[N_FFT];
 
@@ -411,6 +414,16 @@ void timerCallback(int value) {
 }
 
 
+uint32_t sampleIndex = 0;
+void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount)
+{
+	// In playback mode copy data to pOutput. In capture mode read data from pInput. In full-duplex mode, both
+	// pOutput and pInput will be valid and you can move data from pInput into pOutput. Never process more than
+	// frameCount frames.
+	memcpy(pOutput, &wav.sample[sampleIndex], frameCount * wav.blockAlign);
+	sampleIndex += frameCount;
+}
+
 // Draw scene
 void RenderScene(void) {
 
@@ -474,25 +487,25 @@ void RenderScene(void) {
 
 
 	clock_t cur_time = clock() - beginClock;
-	int32_t cur_index = wav.sampleRate / CLOCKS_PER_SEC * cur_time - (N_FFT >> 1);
+	int32_t cur_index = sampleIndex; // wav.sampleRate / CLOCKS_PER_SEC * cur_time - (N_FFT >> 1);
 
 
 	for (int32_t i = 0; i < N_FFT; ++i) {
 		if (i + cur_index >= 0 && i + cur_index < wav.numSamples) {
-			values[i].Re = wav.sample[i + cur_index].L / 32768.f * w_hanning[i];
+			values[i] = wav.sample[i + cur_index].L / 32768.f * w_hanning[i];
 		}
 	}
 
-	fft(values, N_FFT, temp);
+	fft(values, N_FFT);
 
-	if (cur_index > 200000) {
-		for (int32_t i = 0; i < N_FFT; ++i) {
-			printf("%f\t", values[i].Re);
-		}
-	}
+	//if (cur_index > 200000) {
+	//	for (int32_t i = 0; i < N_FFT; ++i) {
+	//		printf("%lf\t", values[i].real());
+	//	}
+	//}
 
 	for (int32_t i = 0; i < N_FFT; ++i) {
-		mag[i] = values[i].Re * values[i].Re + values[i].Im * values[i].Im;
+		mag[i] = abs(values[i]);
 		if (mag[i] > mag_smoothed[i]) {
 			mag_smoothed[i] = smoothUp * mag[i] + (1 - smoothUp) * mag_smoothed[i];
 		}
@@ -510,8 +523,8 @@ void RenderScene(void) {
 		if (i == N_FFT >> 1) {
 			glColor3f(100 / 255.f, 52 / 255.f, 158 / 255.f);
 		}
-		glVertex3f(i / 2, 0.f, 0.f);
-		glVertex3f(i / 2, 2 * mag[i], 0.f);
+		glVertex3f(i, 0.f, 0.f);
+		glVertex3f(i, 4 * mag_smoothed[i], 0.f);
 	}
 
 	glEnd();
@@ -544,6 +557,8 @@ void RenderScene(void) {
 	glPopMatrix(); // Restore the matrix state
 	glutSwapBuffers();
 }
+
+
 int main(int argc, char* argv[]) {
 
 	//test_fft();
@@ -598,8 +613,26 @@ int main(int argc, char* argv[]) {
 	}
 
 	srand(time(NULL));//设置随机数种子，使每次产生的随机序列不同
-	PlaySound(L"D:\\CloudMusic\\Cheetah Mobile Games - The Piano.wav", NULL, SND_FILENAME | SND_ASYNC);
+	//PlaySound(L"D:\\CloudMusic\\Cheetah Mobile Games - The Piano.wav", NULL, SND_FILENAME | SND_ASYNC);
 	beginClock = clock() + 200;
+
+	ma_device_config config = ma_device_config_init(ma_device_type_playback);
+	config.playback.format = ma_format_s16;   // Set to ma_format_unknown to use the device's native format.
+	config.playback.channels = 2;               // Set to 0 to use the device's native channel count.
+	config.sampleRate = 48000;           // Set to 0 to use the device's native sample rate.
+	config.dataCallback = data_callback;   // This function will be called when miniaudio needs more data.
+	config.pUserData = &wav;   // Can be accessed from the device object (device.pUserData).
+
+	ma_device device;
+	if (ma_device_init(NULL, &config, &device) != MA_SUCCESS) {
+		return -1;  // Failed to initialize the device.
+	}
+
+	ma_device_start(&device);     // The device is sleeping by default so you'll need to start it manually.
+
+
 	glutMainLoop();
+	ma_device_uninit(&device);    // This will stop the device so no need to do that manually.
 	return 0;
 }
+
