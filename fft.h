@@ -1,10 +1,12 @@
 #pragma once
 
-#define Q_FFT	3		/* for 2^3 points */
-#define N_FFT	(1<<Q_FFT)		/* N-point FFT, iFFT */
+#define N_FFT 2048	/* N-point FFT, iFFT */
 
 typedef float real;
-typedef struct { real Re; real Im; } complex;
+typedef struct {
+	real Re;
+	real Im;
+} complex;
 
 #ifndef PI
 # define PI	3.14159265358979323846264338327950288

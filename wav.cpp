@@ -1,36 +1,24 @@
 ﻿
-//  main.cpp
-//  PCM3.0    解码效率低 卡顿十分严重
+//  wav.cpp
 //
-//  Created by boone on 2018/8/9.
-//  Copyright © 2018年 boone. All rights reserved.
+//  Created by Jingyi Wang on 2021/11/6.
 //
 
 #include <iostream>
 #include <fstream>
 #include <iomanip>
 
-struct data_16bits {
-    int16_t L, R;
-};
+#include "wav.h"
 
-struct wav_struct
-{
-    uint16_t audioFormat;
-    uint16_t numChannels;
-    uint32_t sampleRate;
-    uint32_t byteRate;    // Bytes per second
-    uint16_t blockAlign;  // Bytes per sample, bitePerSample * numChannels / 8
-    uint16_t bitsPerSample;
-    uint32_t dataSize;
-    data_16bits* samples;
-};
+void printMeta(wav_t& WAV) {
+    printf("Num channels: %d\nSampling rate: %d\nByte rate: %d\nBlock Align: %d\nBits per sample: %d\nData size: %d\n",
+        WAV.numChannels, WAV.sampleRate, WAV.byteRate, WAV.blockAlign, WAV.bitsPerSample, WAV.dataSize);
+}
 
-int main(int argc, char** argv)
-{
+int loadWav(const char path[], wav_t& WAV) {
+
     std::fstream fs;
-    wav_struct WAV;
-    fs.open("D:\\CloudMusic\\Cheetah Mobile Games - The Piano.wav", std::ios::binary | std::ios::in);
+    fs.open(path, std::ios::binary | std::ios::in);
     
     char descriptor[5] = { 0 };
     uint64_t fileOffset = 8;
@@ -58,27 +46,20 @@ int main(int argc, char** argv)
 
         if (strcmp(descriptor, "data") == 0) {
             WAV.dataSize = chunk_size;
-            WAV.samples = new data_16bits[WAV.dataSize >> 2];
+            WAV.numSamples = WAV.dataSize >> 2;
+            WAV.sample = new sample_16b_2ch_t[WAV.numSamples];
 
             fs.seekg(fileOffset);
-            fs.read((char*)WAV.samples, WAV.dataSize);
+            fs.read((char*)WAV.sample, WAV.dataSize);
             break;
         }
 
         fileOffset += chunk_size;
     }
     fs.close();
+    return 0;
+}
 
-    printf("Num channels: %d Sampling rate: %d Byte rate: %d Block Align: %d Bits per sample: %d Data size: %d\n", WAV.numChannels, WAV.sampleRate, WAV.byteRate, WAV.blockAlign, WAV.bitsPerSample, WAV.dataSize);
-
-
-    for (uint32_t i = 100000 / 4; i < 100100 / 4; i++)
-    {
-        float floatData = WAV.samples[i].L / 32768.f;
-        printf("%f ", floatData);
-
-    }
-
-    delete[] WAV.samples;
-    system("pause");
+void freeWav(wav_t& WAV) {
+    delete[] WAV.sample;
 }

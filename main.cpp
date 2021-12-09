@@ -16,8 +16,13 @@
 #include <cmath>
 #include <vector>
 #include <list>
+#include <ctime>
 
+#include "mmsystem.h"
 #include "fft.h"
+#include "wav.h"
+
+#pragma comment(lib, "winmm.lib")
 
 // Angles of rotation
 static GLfloat xRot = 0.0f;
@@ -25,6 +30,17 @@ static GLfloat yRot = 0.0f;
 
 static int window_width = 1280, window_height = 720;
 int timeIncreasemet = 16;	// Refresh period in ms
+clock_t beginClock;
+
+wav_t wav;
+
+complex values[N_FFT] = { 0.f, 0.f }, temp[N_FFT];
+float mag[N_FFT] = { 0.f }, mag_smoothed[N_FFT] = { 0.f };
+float w_hanning[N_FFT];
+
+float smoothUp = 0.8, smoothDown = 0.08;
+
+
 
 int getRand(int maxN) {
 	return rand() % (maxN + 1);
@@ -397,6 +413,8 @@ void timerCallback(int value) {
 
 // Draw scene
 void RenderScene(void) {
+
+
 	// Clear the window with current clearing color
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	// Perform the depth test to render multiple objects in the correct order of Z-axis value
@@ -428,7 +446,7 @@ void RenderScene(void) {
 	glVertex3f(0, 0, 100);
 	glEnd();
 
-	// Draw the blue-black background
+	// Draw the blue-white background
 	glPushMatrix();
 		glTranslatef(0.0f, 0.0f, -500.0f);
 		glBegin(GL_POLYGON);//多边形
@@ -442,16 +460,62 @@ void RenderScene(void) {
 		glEnd();
 	glPopMatrix();
 
-	// Draw the blue-black background
+	// Draw the grey floor
 	glPushMatrix();
 	glTranslatef(0.0f, -500.0f, 0.0f);
-	glBegin(GL_POLYGON);//多边形
+
+	glBegin(GL_POLYGON);
 	glColor3f(203 / 255.f, 214 / 255.f, 216 / 255.f);
 	glVertex3f(-1000, 0, 500);
 	glVertex3f(+1000, 0, 500);
 	glVertex3f(+1000, 0, -500);
 	glVertex3f(-1000, 0, -500);
 	glEnd();
+
+
+	clock_t cur_time = clock() - beginClock;
+	int32_t cur_index = wav.sampleRate / CLOCKS_PER_SEC * cur_time - (N_FFT >> 1);
+
+
+	for (int32_t i = 0; i < N_FFT; ++i) {
+		if (i + cur_index >= 0 && i + cur_index < wav.numSamples) {
+			values[i].Re = wav.sample[i + cur_index].L / 32768.f * w_hanning[i];
+		}
+	}
+
+	fft(values, N_FFT, temp);
+
+	if (cur_index > 200000) {
+		for (int32_t i = 0; i < N_FFT; ++i) {
+			printf("%f\t", values[i].Re);
+		}
+	}
+
+	for (int32_t i = 0; i < N_FFT; ++i) {
+		mag[i] = values[i].Re * values[i].Re + values[i].Im * values[i].Im;
+		if (mag[i] > mag_smoothed[i]) {
+			mag_smoothed[i] = smoothUp * mag[i] + (1 - smoothUp) * mag_smoothed[i];
+		}
+		else {
+			mag_smoothed[i] = smoothDown * mag[i] + (1 - smoothDown) * mag_smoothed[i];
+		}
+	}
+
+	glTranslatef(-512, 200.0f, 0.0f);
+	glBegin(GL_LINES);
+	glColor3f(45 / 255.f, 89 / 255.f, 172 / 255.f);
+
+
+	for (uint32_t i = 0; i < N_FFT; ++i) {
+		if (i == N_FFT >> 1) {
+			glColor3f(100 / 255.f, 52 / 255.f, 158 / 255.f);
+		}
+		glVertex3f(i / 2, 0.f, 0.f);
+		glVertex3f(i / 2, 2 * mag[i], 0.f);
+	}
+
+	glEnd();
+
 	glPopMatrix();
 
 	for (auto it = fireworks.begin(); it != fireworks.end(); ++it) {
@@ -482,7 +546,11 @@ void RenderScene(void) {
 }
 int main(int argc, char* argv[]) {
 
-	test_fft();
+	//test_fft();
+
+	loadWav("D:\\CloudMusic\\Cheetah Mobile Games - The Piano.wav", wav);
+	printMeta(wav);
+
 
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
@@ -525,8 +593,13 @@ int main(int argc, char* argv[]) {
 		}
 	}
 
-	srand(time(NULL));//设置随机数种子，使每次产生的随机序列不同
+	for (uint32_t i = 0; i < N_FFT; ++i) {
+		w_hanning[i] = 0.5 - 0.5 * cosf(2 * PI * i / N_FFT);
+	}
 
+	srand(time(NULL));//设置随机数种子，使每次产生的随机序列不同
+	PlaySound(L"D:\\CloudMusic\\Cheetah Mobile Games - The Piano.wav", NULL, SND_FILENAME | SND_ASYNC);
+	beginClock = clock() + 200;
 	glutMainLoop();
 	return 0;
 }
