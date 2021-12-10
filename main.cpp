@@ -46,36 +46,113 @@ float smoothUp = 0.9, smoothDown = 0.04;
 
 
 
-class BandPassFilter {
+class PianoKey {
 public:
-	float fL, f0, fH;	// Lower corner, center higher corner freq
 
-	void init(float fl, float fp, float fh, uint32_t n_fft, uint32_t sampleFreq) {
+	typedef enum {
+		NORMAL_SHAPE = 0,
+		L_SHAPE,
+		INV_L_SHAPE,
+	} pianoKeyShape_t;
+
+	typedef struct {
+		float x, z;
+	} point_t;
+
+
+	pianoKeyShape_t shape;
+	float fL, f0, fH;	// Lower corner, center higher corner freq
+	float cx, cz;
+	uint8_t r, g, b;
+	float height = 0;
+	std::vector<point_t> pts;
+
+	void initBpf(float fl, float fp, float fh, uint32_t n_fft, uint32_t sampleFreq) {
 		fL = fl * n_fft / sampleFreq;
 		f0 = fp * n_fft / sampleFreq;
 		fH = fh * n_fft / sampleFreq;
 	}
 
-	float getMag(float mag[]) {
-		float ret = 0.f;
+	void initPianoKey(float x, float z, pianoKeyShape_t sh) {
+		cx = x;
+		cz = z;
+		shape = sh;
+		if (shape == NORMAL_SHAPE) {
+			pts.push_back({ 0.f, 0.f });
+			pts.push_back({ 0.f, 100.f });
+			pts.push_back({ 60.f, 100.f });
+			pts.push_back({ 60.f, 0.f });
+		}
+	}
+
+	void setColor3b(uint8_t r, uint8_t g, uint8_t b) {
+		this->r = r;
+		this->g = g;
+		this->b = b;
+	}
+
+	float update(float mag[]) {
+		float h_observed = 0.f;
 		uint32_t fld = ceilf(fL);
 		uint32_t fhd = ceilf(fH);
 		for (uint32_t i = fld; i < fhd; ++i) {
 			if (i < f0) {
-				ret += mag[i] * (i - fL) / (f0 - fL);
+				h_observed += mag[i] * (i - fL) / (f0 - fL);
 			}
 			else {
-				ret += mag[i] * (i - fH) / (f0 - fH);
+				h_observed += mag[i] * (i - fH) / (f0 - fH);
 			}
 		}
-		return ret;
+
+		h_observed *= 3;
+
+		if (h_observed > height)
+			height = smoothUp * h_observed + (1 - smoothUp) * height;
+		else
+			height = smoothDown * h_observed + (1 - smoothDown) * height;
+
+		return height;
+	}
+
+	void draw() {
+		glPushMatrix();
+		glTranslatef(cx, 0, cz);
+		glColor3ub(r, g, b);
+		glBegin(GL_POLYGON);
+		for (int i = 0; i < pts.size(); ++i) {
+			glNormal3f(0, -1, 0);
+			glVertex3f(pts[i].x, 0, pts[i].z);
+		}
+		glEnd();
+		glBegin(GL_POLYGON);
+		for (int i = 0; i < pts.size(); ++i) {
+			glNormal3f(0, 1, 0);
+			glVertex3f(pts[i].x, height, pts[i].z);
+		}
+		glEnd();
+		for (int i = 0; i < pts.size(); ++i) {
+			int nextIndex = (i == pts.size() - 1) ? 0 : i + 1;
+			glBegin(GL_POLYGON);
+			float nx = pts[i].z - pts[nextIndex].z;
+			float nz = pts[nextIndex].x - pts[i].x;
+			float norm = sqrtf(nx * nx + nz * nz);
+			nx /= norm; nz /= norm;
+			glNormal3f(nx, 0, nz);
+			glVertex3f(pts[i].x, 0, pts[i].z);
+			glNormal3f(nx, 0, nz);
+			glVertex3f(pts[nextIndex].x, 0, pts[nextIndex].z);
+			glNormal3f(nx, 0, nz);
+			glVertex3f(pts[nextIndex].x, height, pts[nextIndex].z);
+			glNormal3f(nx, 0, nz);
+			glVertex3f(pts[i].x, height, pts[i].z);
+			glEnd();
+		}
+		glPopMatrix();
 	}
 
 };
 
-BandPassFilter filters[36];
-
-
+PianoKey pianoKeys[36];
 
 
 int getRand(int maxN) {
@@ -370,9 +447,9 @@ void ChangeSize(int w, int h) {
 // This topic will be covered later on in the module so please skip this for now.
 void SetupRC() {
 	// Light parameters and coordinates
-	GLfloat whiteLight[] = { 0.45f, 0.45f, 0.45f, 1.0f };
-	GLfloat sourceLight[] = { 0.25f, 0.25f, 0.25f, 1.0f };
-	GLfloat lightPos[] = { -50.f, 25.0f, 250.0f, 0.0f };
+	GLfloat whiteLight[] = { 0.5f, 0.5f, 0.5f, 1.0f };
+	GLfloat sourceLight[] = { 0.3f, 0.3f, 0.3f, 1.0f };
+	GLfloat lightPos[] = { -200.f, 500.0f, 250.0f, 0.0f };
 	glEnable(GL_DEPTH_TEST); // Hidden surface removal
 	glEnable(GL_LIGHTING); // Enable lighting
 	// Setup and enable light 0
@@ -386,6 +463,7 @@ void SetupRC() {
 	glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE);
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Black background
 }
+
 
 float test = 0.0f;
 float test2 = 0.0f;
@@ -497,11 +575,11 @@ void RenderScene(void) {
 	glPushMatrix();
 		glTranslatef(0.0f, 0.0f, -500.0f);
 		glBegin(GL_POLYGON);//¶à±ßÐÎ
-		glColor3f(228 / 255.f, 237 / 255.f, 241 / 255.f);
+		glColor3ub(228, 237, 241);
 		glVertex3f(-1920, -1080, 0.f);
 		glVertex3f(+1920, -1080, 0.f);
 
-		glColor3f(167 / 255.f, 221 / 255.f, 239 / 255.f);
+		glColor3ub(167, 221, 239);
 		glVertex3f(+1920, +1080, 0.f);
 		glVertex3f(-1920, +1080, 0.f);
 		glEnd();
@@ -547,33 +625,37 @@ void RenderScene(void) {
 
 
 	glPushMatrix();
-	glTranslatef(-200, 0.0f, -100.0f);
+	glTranslatef(-1200, 0.0f, -200.0f);
 	for (uint32_t i = 0; i < 36; ++i) {
-		float height = filters[i].getMag(mag);
-
-		if (height >height_smoothed[i])
-			height_smoothed[i] = smoothUp * height + (1 - smoothUp) * height_smoothed[i];
-		else
-			height_smoothed[i] = smoothDown * height + (1 - smoothDown) * height_smoothed[i];
-
-		glBegin(GL_POLYGON);
-		float width = 20;
-		if(i % 12 == 0 || i % 12 == 2 || i % 12 == 4 || i % 12 == 5 || i % 12 == 7 || i % 12 == 9 || i % 12 == 11)
-			glColor3f(255 / 255.f, 255 / 255.f, 255 / 255.f);
-		else {
-			glColor3f(0 / 255.f, 0 / 255.f, 0 / 255.f);
-			width = 8;
-		}
-		glVertex3f(0, 0.f, 0.f);
-		glVertex3f(width, 0.f, 0.f);
-		glVertex3f(width, height_smoothed[i], 0.f);
-		glVertex3f(0, height_smoothed[i], 0.f);
-		glEnd();
-		glTranslatef(width + 2, 0, 0);
-		if ((i + 1) % 12 == 0) {
-			glTranslatef(20, 0, 0);
-		}
+		pianoKeys[i].update(mag);
+		pianoKeys[i].draw();
 	}
+	//for (uint32_t i = 0; i < 36; ++i) {
+	//	float height = filters[i].getMag(mag);
+
+	//	if (height >height_smoothed[i])
+	//		height_smoothed[i] = smoothUp * height + (1 - smoothUp) * height_smoothed[i];
+	//	else
+	//		height_smoothed[i] = smoothDown * height + (1 - smoothDown) * height_smoothed[i];
+
+	//	glBegin(GL_POLYGON);
+	//	float width = 20;
+	//	if(i % 12 == 0 || i % 12 == 2 || i % 12 == 4 || i % 12 == 5 || i % 12 == 7 || i % 12 == 9 || i % 12 == 11)
+	//		glColor3f(255 / 255.f, 255 / 255.f, 255 / 255.f);
+	//	else {
+	//		glColor3f(0 / 255.f, 0 / 255.f, 0 / 255.f);
+	//		width = 8;
+	//	}
+	//	glVertex3f(0, 0.f, 0.f);
+	//	glVertex3f(width, 0.f, 0.f);
+	//	glVertex3f(width, height_smoothed[i], 0.f);
+	//	glVertex3f(0, height_smoothed[i], 0.f);
+	//	glEnd();
+	//	glTranslatef(width + 2, 0, 0);
+	//	if ((i + 1) % 12 == 0) {
+	//		glTranslatef(20, 0, 0);
+	//	}
+	//}
 	glPopMatrix();
 
 	glPushMatrix();
@@ -629,7 +711,7 @@ int main(int argc, char* argv[]) {
 
 	//test_fft();
 
-	loadWav("D:\\CloudMusic\\Cheetah Mobile Games - The Winter.wav", wav);
+	loadWav("D:\\CloudMusic\\Cheetah Mobile Games - The Piano.wav", wav);
 	printMeta(wav);
 
 
@@ -679,11 +761,22 @@ int main(int argc, char* argv[]) {
 	}
 
 	for (int32_t i = 0; i < 36; ++i) {
-		filters[i].init(
+		pianoKeys[i].initBpf(
 			440 * powf(2.f, (i - 10) / 12.f),
 			440 * powf(2.f, (i - 9) / 12.f),
 			440 * powf(2.f, (i - 8) / 12.f),
 			N_FFT, wav.sampleRate);
+		
+		pianoKeys[i].initPianoKey(i * 70, 0, PianoKey::NORMAL_SHAPE);
+
+		float width = 20;
+		if (i % 12 == 0 || i % 12 == 2 || i % 12 == 4 || i % 12 == 5 || i % 12 == 7 || i % 12 == 9 || i % 12 == 11)
+			pianoKeys[i].setColor3b(240, 240, 240);
+		else {
+			pianoKeys[i].setColor3b(50, 65, 125);
+			width = 8;
+		}
+
 	}
 
 
