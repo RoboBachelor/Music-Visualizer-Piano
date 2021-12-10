@@ -2,7 +2,10 @@
 
 #include <iostream>
 #include <complex>
-#define N_FFT 4096	/* N-point FFT, iFFT */
+#define Q_FFT 11
+#define N_FFT (1 << Q_FFT)	/* N-point FFT, iFFT */
 #define M_PI 3.1415926535897932384
 
-void fft(std::complex<double>* f, int N);
+typedef std::complex<float> fft_complex_t;
+
+void fft(fft_complex_t* f, int N);

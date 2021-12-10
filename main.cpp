@@ -37,11 +37,44 @@ clock_t beginClock;
 
 wav_t wav;
 
-std::complex<double> values[N_FFT] = { 0.f, 0.f };
+fft_complex_t values[N_FFT] = { 0.f, 0.f };
 float mag[N_FFT] = { 0.f }, mag_smoothed[N_FFT] = { 0.f };
+float height_smoothed[36];
 float w_hanning[N_FFT];
 
-float smoothUp = 0.8, smoothDown = 0.08;
+float smoothUp = 0.9, smoothDown = 0.04;
+
+
+
+class BandPassFilter {
+public:
+	float fL, f0, fH;	// Lower corner, center higher corner freq
+
+	void init(float fl, float fp, float fh, uint32_t n_fft, uint32_t sampleFreq) {
+		fL = fl * n_fft / sampleFreq;
+		f0 = fp * n_fft / sampleFreq;
+		fH = fh * n_fft / sampleFreq;
+	}
+
+	float getMag(float mag[]) {
+		float ret = 0.f;
+		uint32_t fld = ceilf(fL);
+		uint32_t fhd = ceilf(fH);
+		for (uint32_t i = fld; i < fhd; ++i) {
+			if (i < f0) {
+				ret += mag[i] * (i - fL) / (f0 - fL);
+			}
+			else {
+				ret += mag[i] * (i - fH) / (f0 - fH);
+			}
+		}
+		return ret;
+	}
+
+};
+
+BandPassFilter filters[36];
+
 
 
 
@@ -396,7 +429,7 @@ void timerCallback(int value) {
 	static int threshold = 0;
 	if (cnt++ * timeIncreasemet >= threshold) {
 		cnt = 0;
-		threshold = getRand(3000);
+		threshold = getRand(8000);
 		fireworks.push_back(Firework(getRand(window_width) - window_width / 2,  60 + getRand(300), 500 + getRand(800), getRand(360)));
 	}
 
@@ -420,7 +453,7 @@ void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uin
 	// In playback mode copy data to pOutput. In capture mode read data from pInput. In full-duplex mode, both
 	// pOutput and pInput will be valid and you can move data from pInput into pOutput. Never process more than
 	// frameCount frames.
-	memcpy(pOutput, &wav.sample[sampleIndex], frameCount * wav.blockAlign);
+	memcpy(pOutput, &wav.sample[sampleIndex], (size_t)frameCount * wav.blockAlign);
 	sampleIndex += frameCount;
 }
 
@@ -458,6 +491,7 @@ void RenderScene(void) {
 	glVertex3f(0, 0, 0);
 	glVertex3f(0, 0, 100);
 	glEnd();
+	glPopMatrix();
 
 	// Draw the blue-white background
 	glPushMatrix();
@@ -477,6 +511,7 @@ void RenderScene(void) {
 	glPushMatrix();
 	glTranslatef(0.0f, -500.0f, 0.0f);
 
+	glPushMatrix();
 	glBegin(GL_POLYGON);
 	glColor3f(203 / 255.f, 214 / 255.f, 216 / 255.f);
 	glVertex3f(-1000, 0, 500);
@@ -484,6 +519,7 @@ void RenderScene(void) {
 	glVertex3f(+1000, 0, -500);
 	glVertex3f(-1000, 0, -500);
 	glEnd();
+	glPopMatrix();
 
 
 	clock_t cur_time = clock() - beginClock;
@@ -498,11 +534,6 @@ void RenderScene(void) {
 
 	fft(values, N_FFT);
 
-	//if (cur_index > 200000) {
-	//	for (int32_t i = 0; i < N_FFT; ++i) {
-	//		printf("%lf\t", values[i].real());
-	//	}
-	//}
 
 	for (int32_t i = 0; i < N_FFT; ++i) {
 		mag[i] = abs(values[i]);
@@ -514,6 +545,38 @@ void RenderScene(void) {
 		}
 	}
 
+
+	glPushMatrix();
+	glTranslatef(-200, 0.0f, -100.0f);
+	for (uint32_t i = 0; i < 36; ++i) {
+		float height = filters[i].getMag(mag);
+
+		if (height >height_smoothed[i])
+			height_smoothed[i] = smoothUp * height + (1 - smoothUp) * height_smoothed[i];
+		else
+			height_smoothed[i] = smoothDown * height + (1 - smoothDown) * height_smoothed[i];
+
+		glBegin(GL_POLYGON);
+		float width = 20;
+		if(i % 12 == 0 || i % 12 == 2 || i % 12 == 4 || i % 12 == 5 || i % 12 == 7 || i % 12 == 9 || i % 12 == 11)
+			glColor3f(255 / 255.f, 255 / 255.f, 255 / 255.f);
+		else {
+			glColor3f(0 / 255.f, 0 / 255.f, 0 / 255.f);
+			width = 8;
+		}
+		glVertex3f(0, 0.f, 0.f);
+		glVertex3f(width, 0.f, 0.f);
+		glVertex3f(width, height_smoothed[i], 0.f);
+		glVertex3f(0, height_smoothed[i], 0.f);
+		glEnd();
+		glTranslatef(width + 2, 0, 0);
+		if ((i + 1) % 12 == 0) {
+			glTranslatef(20, 0, 0);
+		}
+	}
+	glPopMatrix();
+
+	glPushMatrix();
 	glTranslatef(-512, 200.0f, 0.0f);
 	glBegin(GL_LINES);
 	glColor3f(45 / 255.f, 89 / 255.f, 172 / 255.f);
@@ -523,18 +586,21 @@ void RenderScene(void) {
 		if (i == N_FFT >> 1) {
 			glColor3f(100 / 255.f, 52 / 255.f, 158 / 255.f);
 		}
-		glVertex3f(i, 0.f, 0.f);
-		glVertex3f(i, 4 * mag_smoothed[i], 0.f);
+		glVertex3f(i/4, 0.f, 0.f);
+		glVertex3f(i/4, 4 * mag_smoothed[i], 0.f);
 	}
 
 	glEnd();
+	glPopMatrix();
+	
+
 
 	glPopMatrix();
 
 	for (auto it = fireworks.begin(); it != fireworks.end(); ++it) {
 		(*it).draw();
 	}
-
+	/*
 	glPushMatrix(); // Save the matrix state and perform rotations
 		glTranslatef(0.0f, 0.f, 0.0f);
 		glRotatef(xRot, 1.0f, 0.0f, 0.0f);
@@ -547,7 +613,7 @@ void RenderScene(void) {
 		}
 
 	glPopMatrix(); // Restore the matrix state
-
+*/
 	glPushMatrix(); // Save the matrix state and perform rotations
 		glTranslatef(-300.0f, 250.0f, 0.f);
 		glRotatef(xRot, 1.0f, 0.0f, 0.0f);
@@ -563,7 +629,7 @@ int main(int argc, char* argv[]) {
 
 	//test_fft();
 
-	loadWav("D:\\CloudMusic\\Cheetah Mobile Games - The Piano.wav", wav);
+	loadWav("D:\\CloudMusic\\Cheetah Mobile Games - The Winter.wav", wav);
 	printMeta(wav);
 
 
@@ -612,9 +678,16 @@ int main(int argc, char* argv[]) {
 		w_hanning[i] = 0.5 - 0.5 * cosf(2 * PI * i / N_FFT);
 	}
 
+	for (int32_t i = 0; i < 36; ++i) {
+		filters[i].init(
+			440 * powf(2.f, (i - 10) / 12.f),
+			440 * powf(2.f, (i - 9) / 12.f),
+			440 * powf(2.f, (i - 8) / 12.f),
+			N_FFT, wav.sampleRate);
+	}
+
+
 	srand(time(NULL));//设置随机数种子，使每次产生的随机序列不同
-	//PlaySound(L"D:\\CloudMusic\\Cheetah Mobile Games - The Piano.wav", NULL, SND_FILENAME | SND_ASYNC);
-	beginClock = clock() + 200;
 
 	ma_device_config config = ma_device_config_init(ma_device_type_playback);
 	config.playback.format = ma_format_s16;   // Set to ma_format_unknown to use the device's native format.
@@ -625,13 +698,13 @@ int main(int argc, char* argv[]) {
 
 	ma_device device;
 	if (ma_device_init(NULL, &config, &device) != MA_SUCCESS) {
+		printf("Error: Can not initialize the sound player device!\n");
 		return -1;  // Failed to initialize the device.
 	}
-
 	ma_device_start(&device);     // The device is sleeping by default so you'll need to start it manually.
 
-
 	glutMainLoop();
+
 	ma_device_uninit(&device);    // This will stop the device so no need to do that manually.
 	return 0;
 }
