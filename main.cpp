@@ -469,15 +469,15 @@ float test = 0.0f;
 float test2 = 0.0f;
 void keyboardCallback(unsigned char key, int x, int y) {// keyboard interaction
 	if (key == 'm') {
-		test += 0.01;
+		test += 10;
 	}
 	if (key == 'M') {
-		test -= 0.01;
+		test -= 10;
 	}
 	if (key == 'a') {
-		test2 += 0.01;
+		test2 += 10;
 	} if (key == 'A') {
-		test2 -= 0.01;
+		test2 -= 10;
 	}
 	// Refresh the window
 	glutPostRedisplay();
@@ -549,13 +549,14 @@ void RenderScene(void) {
 
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	gluPerspective(90.0, 16/9., 4, 1200.0);
+	gluPerspective(60.0, 16/9., 4, 2000.0);
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
-	gluLookAt(0, 0, 500, 0, 0.f, 0, test, 1, 0);
+	gluLookAt(0, 100, 800, 0, -200.f, 0, 0, 1, 0);
 	//gluPerspective()
 
 	glPushMatrix();
+	glTranslatef(0, -500, -500);
 	glBegin(GL_LINES);
 	glColor3f(1, 0.5, 0);
 	glVertex3f(0, 0, 0);
@@ -576,12 +577,16 @@ void RenderScene(void) {
 		glTranslatef(0.0f, 0.0f, -500.0f);
 		glBegin(GL_POLYGON);//多边形
 		glColor3ub(228, 237, 241);
-		glVertex3f(-1920, -1080, 0.f);
-		glVertex3f(+1920, -1080, 0.f);
+		glNormal3f(0, 0, 1);
+		glVertex3f(-1000, -500, 0.f);
+		glNormal3f(0, 0, 1);
+		glVertex3f(+1000, -500, 0.f);
 
 		glColor3ub(167, 221, 239);
-		glVertex3f(+1920, +1080, 0.f);
-		glVertex3f(-1920, +1080, 0.f);
+		glNormal3f(0, 0, 1);
+		glVertex3f(+1000, +500, 0.f);
+		glNormal3f(0, 0, 1);
+		glVertex3f(-1000, +500, 0.f);
 		glEnd();
 	glPopMatrix();
 
@@ -625,7 +630,7 @@ void RenderScene(void) {
 
 
 	glPushMatrix();
-	glTranslatef(-1200, 0.0f, -200.0f);
+	glTranslatef(-1200, test2, -test);
 	for (uint32_t i = 0; i < 36; ++i) {
 		pianoKeys[i].update(mag);
 		pianoKeys[i].draw();
@@ -711,7 +716,7 @@ int main(int argc, char* argv[]) {
 
 	//test_fft();
 
-	loadWav("D:\\CloudMusic\\Cheetah Mobile Games - The Piano.wav", wav);
+	loadWav("D:\\CloudMusic\\Cheetah Mobile Games - The Autumn.wav", wav);
 	printMeta(wav);
 
 
@@ -726,6 +731,15 @@ int main(int argc, char* argv[]) {
 	glutSpecialFunc(specialKeyCallback);
 	glutKeyboardFunc(keyboardCallback);
 
+	/*
+	glClearColor(0.0, 0.0, 0.0, 0.0);
+	glColor3f(0.0, 0.0, 0.0);
+	glLoadIdentity();
+	glMatrixMode(GL_PROJECTION);
+	glFrustum(-640, 640, -360, 360, 400, 2500);*/
+
+	SetupRC();
+
 	//打开抗锯齿功能
 	//1.开启混合功能
 	glEnable(GL_BLEND);
@@ -738,15 +752,6 @@ int main(int argc, char* argv[]) {
 	glEnable(GL_POINT_SMOOTH);
 	glEnable(GL_LINE_SMOOTH);
 	glEnable(GL_POLYGON_SMOOTH);
-
-	/*
-	glClearColor(0.0, 0.0, 0.0, 0.0);
-	glColor3f(0.0, 0.0, 0.0);
-	glLoadIdentity();
-	glMatrixMode(GL_PROJECTION);
-	glFrustum(-640, 640, -360, 360, 400, 2500);*/
-
-	SetupRC();
 
 	for (int i = 0; i < 100; ++i) {
 		for (int j = 0; j < 36; ++j) {
