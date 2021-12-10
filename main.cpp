@@ -53,6 +53,8 @@ public:
 		NORMAL_SHAPE = 0,
 		L_SHAPE,
 		INV_L_SHAPE,
+		TU_SHAPE,
+		BLACK_SHAPE,
 	} pianoKeyShape_t;
 
 	typedef struct {
@@ -63,6 +65,8 @@ public:
 	pianoKeyShape_t shape;
 	float fL, f0, fH;	// Lower corner, center higher corner freq
 	float cx, cz;
+	float w = 60, l = 150;
+	float ws = 20, ls = 60;
 	uint8_t r, g, b;
 	float height = 0;
 	std::vector<point_t> pts;
@@ -77,12 +81,48 @@ public:
 		cx = x;
 		cz = z;
 		shape = sh;
-		if (shape == NORMAL_SHAPE) {
+		switch (shape) {
+		case NORMAL_SHAPE:
 			pts.push_back({ 0.f, 0.f });
-			pts.push_back({ 0.f, 100.f });
-			pts.push_back({ 60.f, 100.f });
-			pts.push_back({ 60.f, 0.f });
+			pts.push_back({ 0.f, l });
+			pts.push_back({ w, l });
+			pts.push_back({ w, 0.f });
+			break;
+		case L_SHAPE:
+			pts.push_back({ 0.f, 0.f });
+			pts.push_back({ 0.f, l });
+			pts.push_back({ w, l });
+			pts.push_back({ w, ls });
+			pts.push_back({ w - ws, ls });
+			pts.push_back({ w - ws, 0.f });
+			break;
+		case INV_L_SHAPE:
+			pts.push_back({ ws, 0.f });
+			pts.push_back({ ws, ls });
+			pts.push_back({ 0.f, ls });
+			pts.push_back({ 0.f, l });
+			pts.push_back({ w, l });
+			pts.push_back({ w, 0 });
+			break;
+		case TU_SHAPE:
+			pts.push_back({ ws, 0.f });
+			pts.push_back({ ws, ls });
+			pts.push_back({ 0.f, ls });
+			pts.push_back({ 0.f, l });
+
+			pts.push_back({ w, l });
+			pts.push_back({ w, ls });
+			pts.push_back({ w - ws, ls });
+			pts.push_back({ w - ws, 0.f });
+			break;
+		case BLACK_SHAPE:
+			pts.push_back({ -ws, 0.f });
+			pts.push_back({ -ws, ls });
+			pts.push_back({ ws, ls });
+			pts.push_back({ ws, 0.f });
+			break;
 		}
+
 	}
 
 	void setColor3b(uint8_t r, uint8_t g, uint8_t b) {
@@ -118,18 +158,85 @@ public:
 		glPushMatrix();
 		glTranslatef(cx, 0, cz);
 		glColor3ub(r, g, b);
-		glBegin(GL_POLYGON);
-		for (int i = 0; i < pts.size(); ++i) {
+
+		float w1, w2;
+		switch (shape) {
+		case L_SHAPE:
+			w1 = 0;
+			w2 = w - ws;
+			break;
+		case INV_L_SHAPE:
+			w1 = ws;
+			w2 = w;
+			break;
+		case TU_SHAPE:
+			w1 = ws;
+			w2 = w - ws;
+			break;
+		}
+
+		switch (shape) {
+		case NORMAL_SHAPE:
+		case BLACK_SHAPE:
+			glBegin(GL_POLYGON);
+			for (int i = 0; i < pts.size(); ++i) {
+				glNormal3f(0, -1, 0);
+				glVertex3f(pts[i].x, 0, pts[i].z);
+			}
+			glEnd();
+
+			glBegin(GL_POLYGON);
+			for (int i = 0; i < pts.size(); ++i) {
+				glNormal3f(0, 1, 0);
+				glVertex3f(pts[i].x, height, pts[i].z);
+			}
+			glEnd();
+			break;
+		case L_SHAPE:
+		case INV_L_SHAPE:
+		case TU_SHAPE:
+			glBegin(GL_QUADS);
 			glNormal3f(0, -1, 0);
-			glVertex3f(pts[i].x, 0, pts[i].z);
-		}
-		glEnd();
-		glBegin(GL_POLYGON);
-		for (int i = 0; i < pts.size(); ++i) {
+			glVertex3f(0, 0, ls);
+			glNormal3f(0, -1, 0);
+			glVertex3f(0, 0, l);
+			glNormal3f(0, -1, 0);
+			glVertex3f(w, 0, l);
+			glNormal3f(0, -1, 0);
+			glVertex3f(w, 0, ls);
+
+			glNormal3f(0, -1, 0);
+			glVertex3f(w1, 0, 0);
+			glNormal3f(0, -1, 0);
+			glVertex3f(w1, 0, ls);
+			glNormal3f(0, -1, 0);
+			glVertex3f(w2, 0, ls);
+			glNormal3f(0, -1, 0);
+			glVertex3f(w2, 0, 0);
+
 			glNormal3f(0, 1, 0);
-			glVertex3f(pts[i].x, height, pts[i].z);
+			glVertex3f(0, height, ls);
+			//glNormal3f(0, 1, 0);
+			glVertex3f(0, height, l);
+			//glNormal3f(0, 1, 0);
+			glVertex3f(w, height, l);
+			//glNormal3f(0, 1, 0);
+			glVertex3f(w, height, ls);
+
+			glNormal3f(0, 1, 0);
+			glVertex3f(w1, height, 0);
+			//glNormal3f(0, 1, 0);
+			glVertex3f(w1, height, ls);
+			//glNormal3f(0, 1, 0);
+			glVertex3f(w2, height, ls);
+			//glNormal3f(0, 1, 0);
+			glVertex3f(w2, height, 0);
+
+			glEnd();
 		}
-		glEnd();
+
+
+
 		for (int i = 0; i < pts.size(); ++i) {
 			int nextIndex = (i == pts.size() - 1) ? 0 : i + 1;
 			glBegin(GL_POLYGON);
@@ -139,11 +246,11 @@ public:
 			nx /= norm; nz /= norm;
 			glNormal3f(nx, 0, nz);
 			glVertex3f(pts[i].x, 0, pts[i].z);
-			glNormal3f(nx, 0, nz);
+			//glNormal3f(nx, 0, nz);
 			glVertex3f(pts[nextIndex].x, 0, pts[nextIndex].z);
-			glNormal3f(nx, 0, nz);
+			//glNormal3f(nx, 0, nz);
 			glVertex3f(pts[nextIndex].x, height, pts[nextIndex].z);
-			glNormal3f(nx, 0, nz);
+			//glNormal3f(nx, 0, nz);
 			glVertex3f(pts[i].x, height, pts[i].z);
 			glEnd();
 		}
@@ -630,7 +737,7 @@ void RenderScene(void) {
 
 
 	glPushMatrix();
-	glTranslatef(-1200, test2, -test);
+	glTranslatef(-750, test2, -test);
 	for (uint32_t i = 0; i < 36; ++i) {
 		pianoKeys[i].update(mag);
 		pianoKeys[i].draw();
@@ -716,7 +823,7 @@ int main(int argc, char* argv[]) {
 
 	//test_fft();
 
-	loadWav("D:\\CloudMusic\\Cheetah Mobile Games - The Autumn.wav", wav);
+	loadWav("D:\\CloudMusic\\Cheetah Mobile Games - The Time.wav", wav);
 	printMeta(wav);
 
 
@@ -753,6 +860,8 @@ int main(int argc, char* argv[]) {
 	glEnable(GL_LINE_SMOOTH);
 	glEnable(GL_POLYGON_SMOOTH);
 
+	glEnable(GLUT_MULTISAMPLE);
+
 	for (int i = 0; i < 100; ++i) {
 		for (int j = 0; j < 36; ++j) {
 			ballMatrix[i][j].setCenter(-495 + i * 10, -175 + j * 10);
@@ -765,23 +874,44 @@ int main(int argc, char* argv[]) {
 		w_hanning[i] = 0.5 - 0.5 * cosf(2 * PI * i / N_FFT);
 	}
 
+	int positions[12] = { 0, 65, 70, 135, 140, 210, 275, 280, 345, 350, 415, 420};
+	PianoKey::pianoKeyShape_t shapes[12] = {
+		PianoKey::L_SHAPE,		// C
+		PianoKey::BLACK_SHAPE,	// C#
+		PianoKey::TU_SHAPE,		// D
+		PianoKey::BLACK_SHAPE,	// D#
+		PianoKey::INV_L_SHAPE,	// E
+
+		PianoKey::L_SHAPE,		// F
+		PianoKey::BLACK_SHAPE,	// F#
+		PianoKey::TU_SHAPE,		// G
+		PianoKey::BLACK_SHAPE,	// G#
+		PianoKey::TU_SHAPE,		// A
+		PianoKey::BLACK_SHAPE,	// A#
+		PianoKey::INV_L_SHAPE,	// B
+	};
+
 	for (int32_t i = 0; i < 36; ++i) {
+
+		//if (i % 12 == 0) {
+		//	glPushMatrix();
+		//	glTranslatef(i / 12 * 520, 0, 0);
+		//}
+
 		pianoKeys[i].initBpf(
 			440 * powf(2.f, (i - 10) / 12.f),
 			440 * powf(2.f, (i - 9) / 12.f),
 			440 * powf(2.f, (i - 8) / 12.f),
 			N_FFT, wav.sampleRate);
 		
-		pianoKeys[i].initPianoKey(i * 70, 0, PianoKey::NORMAL_SHAPE);
+		pianoKeys[i].initPianoKey(positions[i % 12], 0, shapes[i % 12]);
+		pianoKeys[i].cx += i / 12 * 520;
 
-		float width = 20;
 		if (i % 12 == 0 || i % 12 == 2 || i % 12 == 4 || i % 12 == 5 || i % 12 == 7 || i % 12 == 9 || i % 12 == 11)
 			pianoKeys[i].setColor3b(240, 240, 240);
 		else {
 			pianoKeys[i].setColor3b(50, 65, 125);
-			width = 8;
 		}
-
 	}
 
 
