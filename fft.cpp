@@ -57,5 +57,5 @@ void fft(fft_complex_t* f, int N) //
         n *= 2;
         a = a / 2;
     }
-    free(W);
+    delete[] W;
 }

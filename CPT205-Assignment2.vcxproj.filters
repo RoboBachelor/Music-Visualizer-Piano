@@ -41,5 +41,11 @@
     <ClInclude Include="miniaudio.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="Piano.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="SnowBall.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

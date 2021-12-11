@@ -20,12 +20,11 @@
 #include <list>
 #include <ctime>
 
-//#include "mmsystem.h"
 #include "fft.h"
 #include "wav.h"
 #include "miniaudio.h"
-
-//#pragma comment(lib, "winmm.lib")
+#include "Piano.h"
+#include "SnowBall.h"
 
 // Angles of rotation
 static GLfloat xRot = 0.0f;
@@ -41,212 +40,12 @@ fft_complex_t values[N_FFT] = { 0.f, 0.f };
 float mag[N_FFT] = { 0.f }, mag_smoothed[N_FFT] = { 0.f };
 float height_smoothed[36];
 float w_hanning[N_FFT];
-
 float smoothUp = 0.9, smoothDown = 0.04;
 
+bool keyStatus[4] = { false };
 
-
-class PianoKey {
-public:
-
-	typedef enum {
-		NORMAL_SHAPE = 0,
-		L_SHAPE,
-		INV_L_SHAPE,
-		TU_SHAPE,
-		BLACK_SHAPE,
-	} pianoKeyShape_t;
-
-	typedef struct {
-		float x, z;
-	} point_t;
-
-
-	pianoKeyShape_t shape = NORMAL_SHAPE;
-	float fL, f0, fH;	// Lower corner, center higher corner freq
-	float cx, cz;
-	float w = 60, l = 150;
-	float ws = 20, ls = 60;
-	uint8_t r = 127, g = 127, b = 127;
-	float height = 0;
-	float vh = 0;
-	std::vector<point_t> pts;
-
-	void initBpf(float fl, float fp, float fh, uint32_t n_fft, uint32_t sampleFreq) {
-		fL = fl * n_fft / sampleFreq;
-		f0 = fp * n_fft / sampleFreq;
-		fH = fh * n_fft / sampleFreq;
-	}
-
-	void initPianoKey(float x, float z, pianoKeyShape_t sh) {
-		cx = x;
-		cz = z;
-		shape = sh;
-		switch (shape) {
-		case NORMAL_SHAPE:
-			pts.push_back({ 0.f, 0.f });
-			pts.push_back({ 0.f, l });
-			pts.push_back({ w, l });
-			pts.push_back({ w, 0.f });
-			break;
-		case L_SHAPE:
-			pts.push_back({ 0.f, 0.f });
-			pts.push_back({ 0.f, l });
-			pts.push_back({ w, l });
-			pts.push_back({ w, ls });
-			pts.push_back({ w - ws, ls });
-			pts.push_back({ w - ws, 0.f });
-			break;
-		case INV_L_SHAPE:
-			pts.push_back({ ws, 0.f });
-			pts.push_back({ ws, ls });
-			pts.push_back({ 0.f, ls });
-			pts.push_back({ 0.f, l });
-			pts.push_back({ w, l });
-			pts.push_back({ w, 0 });
-			break;
-		case TU_SHAPE:
-			pts.push_back({ ws, 0.f });
-			pts.push_back({ ws, ls });
-			pts.push_back({ 0.f, ls });
-			pts.push_back({ 0.f, l });
-
-			pts.push_back({ w, l });
-			pts.push_back({ w, ls });
-			pts.push_back({ w - ws, ls });
-			pts.push_back({ w - ws, 0.f });
-			break;
-		case BLACK_SHAPE:
-			pts.push_back({ -ws, 0.f });
-			pts.push_back({ -ws, ls });
-			pts.push_back({ ws, ls });
-			pts.push_back({ ws, 0.f });
-			break;
-		}
-
-	}
-
-	void setColor3b(uint8_t r, uint8_t g, uint8_t b) {
-		this->r = r;
-		this->g = g;
-		this->b = b;
-	}
-
-	float update(float mag[]) {
-		float h_observed = 0.f;
-		float last_height = height;
-		uint32_t fld = ceilf(fL);
-		uint32_t fhd = ceilf(fH);
-		for (uint32_t i = fld; i < fhd; ++i) {
-			if (i < f0) {
-				h_observed += mag[i] * (i - fL) / (f0 - fL);
-			}
-			else {
-				h_observed += mag[i] * (i - fH) / (f0 - fH);
-			}
-		}
-
-		h_observed *= 3;
-
-		if (h_observed > height)
-			height = smoothUp * h_observed + (1 - smoothUp) * height;
-		else
-			height = smoothDown * h_observed + (1 - smoothDown) * height;
-		vh = height - last_height;
-
-		return height;
-	}
-
-	void draw() {
-		glPushMatrix();
-		glTranslatef(cx, 0, cz);
-		glColor3ub(r, g, b);
-
-		float w1, w2;
-		switch (shape) {
-		case L_SHAPE:
-			w1 = 0;
-			w2 = w - ws;
-			break;
-		case INV_L_SHAPE:
-			w1 = ws;
-			w2 = w;
-			break;
-		case TU_SHAPE:
-			w1 = ws;
-			w2 = w - ws;
-			break;
-		}
-
-		switch (shape) {
-		case NORMAL_SHAPE:
-		case BLACK_SHAPE:
-			glBegin(GL_QUADS);
-			for (int i = 0; i < pts.size(); ++i) {
-				glNormal3f(0, -1, 0);
-				glVertex3f(pts[i].x, 0, pts[i].z);
-			}
-			for (int i = 0; i < pts.size(); ++i) {
-				glNormal3f(0, 1, 0);
-				glVertex3f(pts[i].x, height, pts[i].z);
-			}
-			glEnd();
-			break;
-		case L_SHAPE:
-		case INV_L_SHAPE:
-		case TU_SHAPE:
-			glBegin(GL_QUADS);
-			glNormal3f(0, -1, 0);
-			glVertex3f(0, 0, ls);
-			glVertex3f(0, 0, l);
-			glVertex3f(w, 0, l);
-			glVertex3f(w, 0, ls);
-
-			glNormal3f(0, -1, 0);
-			glVertex3f(w1, 0, 0);
-			glVertex3f(w1, 0, ls);
-			glVertex3f(w2, 0, ls);
-			glVertex3f(w2, 0, 0);
-
-			glNormal3f(0, 1, 0);
-			glVertex3f(0, height, ls);
-			glVertex3f(0, height, l);
-			glVertex3f(w, height, l);
-			glVertex3f(w, height, ls);
-
-			glNormal3f(0, 1, 0);
-			glVertex3f(w1, height, 0);
-			glVertex3f(w1, height, ls);
-			glVertex3f(w2, height, ls);
-			glVertex3f(w2, height, 0);
-
-			glEnd();
-			break;
-		}
-
-
-
-		for (int i = 0; i < pts.size(); ++i) {
-			int nextIndex = (i == pts.size() - 1) ? 0 : i + 1;
-			glBegin(GL_POLYGON);
-			float nx = pts[i].z - pts[nextIndex].z;
-			float nz = pts[nextIndex].x - pts[i].x;
-			float norm = sqrtf(nx * nx + nz * nz);
-			nx /= norm; nz /= norm;
-			glNormal3f(nx, 0, nz);
-			glVertex3f(pts[i].x, 0, pts[i].z);
-			glVertex3f(pts[nextIndex].x, 0, pts[nextIndex].z);
-			glVertex3f(pts[nextIndex].x, height, pts[nextIndex].z);
-			glVertex3f(pts[i].x, height, pts[i].z);
-			glEnd();
-		}
-		glPopMatrix();
-	}
-
-};
-
-PianoKey pianoKeys[36];
-
+Piano piano;
+SnowBall snowball;// (&piano);
 
 int getRand(int maxN) {
 	return rand() % (maxN + 1);
@@ -520,16 +319,6 @@ void Firework::draw() {
 std::list<Firework> fireworks;
 Ball ballMatrix[100][36];
 
-void drawCircle(float r, float cx, float cy) {
-
-	//glColor3f(0, 0.5, 1);
-	glBegin(GL_POLYGON);
-	for (float theta = 0; theta < 2 * PI; theta += 0.1) {
-		glVertex2f(cx + r * cos(theta), cy + r * sin(theta));
-	}
-	glEnd();
-}
-
 // Change the view volume and viewport. This is called when the window is resized.
 void ChangeSize(int w, int h) {
 	// Set viewport to window dimensions
@@ -541,14 +330,17 @@ void ChangeSize(int w, int h) {
 void SetupRC() {
 	// Light parameters and coordinates
 	GLfloat whiteLight[] = { 0.5f, 0.5f, 0.5f, 1.0f };
-	GLfloat sourceLight[] = { 0.3f, 0.3f, 0.3f, 1.0f };
-	GLfloat lightPos[] = { -200.f, 500.0f, 250.0f, 0.0f };
+	GLfloat ambientLight[] = { 0.2f, 0.2f, 0.2f, 1.0f };
+	GLfloat diffuseLight[] = { 0.45f, 0.45f, 0.45f, 1.0f };
+	GLfloat specularLight[] = { 0.3f, 0.3f, 0.3f, 1.0f };
+	GLfloat lightPos[] = { -200.f, 500.0f, 350.0f, 0.0f };
 	glEnable(GL_DEPTH_TEST); // Hidden surface removal
 	glEnable(GL_LIGHTING); // Enable lighting
 	// Setup and enable light 0
 	glLightModelfv(GL_LIGHT_MODEL_AMBIENT, whiteLight);
-	glLightfv(GL_LIGHT0, GL_AMBIENT, sourceLight);
-	glLightfv(GL_LIGHT0, GL_DIFFUSE, sourceLight);
+	glLightfv(GL_LIGHT0, GL_AMBIENT, ambientLight);
+	glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuseLight);
+	//glLightfv(GL_LIGHT0, GL_SPECULAR, specularLight);
 	glLightfv(GL_LIGHT0, GL_POSITION, lightPos);
 	glEnable(GL_LIGHT0);
 	glEnable(GL_COLOR_MATERIAL); // Enable colour tracking
@@ -578,18 +370,37 @@ void keyboardCallback(unsigned char key, int x, int y) {// keyboard interaction
 
 // Respond to arrow keys
 void specialKeyCallback(int key, int x, int y){
-	if (key == GLUT_KEY_UP)
-		xRot -= 5.0f;
-	if (key == GLUT_KEY_DOWN)
-		xRot += 5.0f;
-	if (key == GLUT_KEY_LEFT)
-		yRot -= 5.0f;
-	if (key == GLUT_KEY_RIGHT)
-		yRot += 5.0f;
-	xRot = (GLfloat)((const int)xRot % 360);
-	yRot = (GLfloat)((const int)yRot % 360);
-	// Refresh the window
-	glutPostRedisplay();
+	switch (key) {
+	case GLUT_KEY_UP:
+		keyStatus[0] = true;
+		break;
+	case GLUT_KEY_DOWN:
+		keyStatus[1] = true;
+		break;
+	case GLUT_KEY_LEFT:
+		keyStatus[2] = true;
+		break;
+	case GLUT_KEY_RIGHT:
+		keyStatus[3] = true;
+		break;
+	}
+}
+
+void specialKeyUpCallback(int key, int x, int y) {
+	switch (key) {
+	case GLUT_KEY_UP:
+		keyStatus[0] = false;
+		break;
+	case GLUT_KEY_DOWN:
+		keyStatus[1] = false;
+		break;
+	case GLUT_KEY_LEFT:
+		keyStatus[2] = false;
+		break;
+	case GLUT_KEY_RIGHT:
+		keyStatus[3] = false;
+		break;
+	}
 }
 
 
@@ -642,83 +453,11 @@ void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uin
 void RenderScene(void) {
 
 
-	// Clear the window with current clearing color
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	// Perform the depth test to render multiple objects in the correct order of Z-axis value
-	glEnable(GL_DEPTH_TEST); // Hidden surface removal
-
-
-	//glMatrixMode(GL_MODELVIEW);
-
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	gluPerspective(60.0, 16/9., 4, 2000.0);
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
-	gluLookAt(0, 100, 800, 0, -200.f, 0, 0, 1, 0);
-	//gluPerspective()
-
-	glPushMatrix();
-	glTranslatef(0, -500, -500);
-	glBegin(GL_LINES);
-	glColor3f(1, 0.5, 0);
-	glVertex3f(0, 0, 0);
-	glVertex3f(100, 100, 0);
-
-	glColor3f(0, 1, 0.5);
-	glVertex3f(0, 0, 0);
-	glVertex3f(0, 100, 0);
-
-	glColor3f(0, 0.5, 1);
-	glVertex3f(0, 0, 0);
-	glVertex3f(0, 0, 100);
-	glEnd();
-	glPopMatrix();
-
-	// Draw the blue-white background
-	glPushMatrix();
-		glTranslatef(0.0f, 0.0f, -500.0f);
-		glBegin(GL_POLYGON);//多边形
-		glColor3ub(228, 237, 241);
-		glNormal3f(0, 0, 1);
-		glVertex3f(-1000, -500, 0.f);
-		glNormal3f(0, 0, 1);
-		glVertex3f(+1000, -500, 0.f);
-
-		glColor3ub(167, 221, 239);
-		glNormal3f(0, 0, 1);
-		glVertex3f(+1000, +500, 0.f);
-		glNormal3f(0, 0, 1);
-		glVertex3f(-1000, +500, 0.f);
-		glEnd();
-	glPopMatrix();
-
-	// Draw the grey floor
-	glPushMatrix();
-	glTranslatef(0.0f, -500.0f, 0.0f);
-
-	glPushMatrix();
-	glBegin(GL_POLYGON);
-	glColor3f(203 / 255.f, 214 / 255.f, 216 / 255.f);
-	glVertex3f(-1000, 0, 500);
-	glVertex3f(+1000, 0, 500);
-	glVertex3f(+1000, 0, -500);
-	glVertex3f(-1000, 0, -500);
-	glEnd();
-	glPopMatrix();
-
-
-	clock_t cur_time = clock() - beginClock;
-	int32_t cur_index = sampleIndex; // wav.sampleRate / CLOCKS_PER_SEC * cur_time - (N_FFT >> 1);
-
-
 	for (int32_t i = 0; i < N_FFT; ++i) {
-		if (i + cur_index >= 0 && i + cur_index < wav.numSamples) {
-			values[i] = wav.sample[i + cur_index].L / 32768.f * w_hanning[i];
-		}
-		else {
+		if (i + sampleIndex >= 0 && i + sampleIndex < wav.numSamples)
+			values[i] = wav.sample[i + sampleIndex].L / 32768.f * w_hanning[i];
+		else
 			values[i] = 0;
-		}
 	}
 
 	fft(values, N_FFT);
@@ -735,85 +474,84 @@ void RenderScene(void) {
 	}
 
 
+
+	// Clear the window with current clearing color
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	// Perform the depth test to render multiple objects in the correct order of Z-axis value
+	glEnable(GL_DEPTH_TEST); // Hidden surface removal
+
+
+	//glMatrixMode(GL_MODELVIEW);
+
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	gluPerspective(60.0, 16/9., 4, 2000.0);
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+	gluLookAt(0, 100, 800, 0, -200.f, 0, 0, 1, 0);
+	//gluPerspective()
+
+	// Draw the blue-white background
 	glPushMatrix();
-	glTranslatef(-750, test2, -test);
-	for (uint32_t i = 0; i < 36; ++i) {
-		pianoKeys[i].update(mag);
-		pianoKeys[i].draw();
-	}
-	//for (uint32_t i = 0; i < 36; ++i) {
-	//	float height = filters[i].getMag(mag);
+	glTranslatef(0.0f, 0.0f, -500.0f);
+	glBegin(GL_POLYGON);//多边形
+	glColor3ub(228, 237, 241);
+	glNormal3f(0, 0, 1);
+	glVertex3f(-1500, -500, 0.f);
+	glVertex3f(+1500, -500, 0.f);
 
-	//	if (height >height_smoothed[i])
-	//		height_smoothed[i] = smoothUp * height + (1 - smoothUp) * height_smoothed[i];
-	//	else
-	//		height_smoothed[i] = smoothDown * height + (1 - smoothDown) * height_smoothed[i];
-
-	//	glBegin(GL_POLYGON);
-	//	float width = 20;
-	//	if(i % 12 == 0 || i % 12 == 2 || i % 12 == 4 || i % 12 == 5 || i % 12 == 7 || i % 12 == 9 || i % 12 == 11)
-	//		glColor3f(255 / 255.f, 255 / 255.f, 255 / 255.f);
-	//	else {
-	//		glColor3f(0 / 255.f, 0 / 255.f, 0 / 255.f);
-	//		width = 8;
-	//	}
-	//	glVertex3f(0, 0.f, 0.f);
-	//	glVertex3f(width, 0.f, 0.f);
-	//	glVertex3f(width, height_smoothed[i], 0.f);
-	//	glVertex3f(0, height_smoothed[i], 0.f);
-	//	glEnd();
-	//	glTranslatef(width + 2, 0, 0);
-	//	if ((i + 1) % 12 == 0) {
-	//		glTranslatef(20, 0, 0);
-	//	}
-	//}
+	glColor3ub(167, 221, 239);
+	glVertex3f(+1500, +500, 0.f);
+	glVertex3f(-1500, +500, 0.f);
+	glEnd();
 	glPopMatrix();
 
+	// The Ground Coordinate
 	glPushMatrix();
-	glTranslatef(-512, 200.0f, 0.0f);
-	glBegin(GL_LINES);
-	glColor3f(45 / 255.f, 89 / 255.f, 172 / 255.f);
+	glTranslatef(0.0f, -500.0f, 0.0f);
 
+	// Draw the gray ground
+	glPushMatrix();
+	glBegin(GL_POLYGON);
+	glColor3ub(160, 170, 175);
+	glNormal3f(5/13.f, 12/13.f, 0);
+	glVertex3f(-1500, 0, -500);
+	glVertex3f(-1500, 0, 500);
+	glNormal3f(-5 / 13.f, 12 / 13.f, 0);
+	glVertex3f(+1500, 0, 500);
+	glVertex3f(+1500, 0, -500);
+	glEnd();
+	glPopMatrix();
+
+	piano.update(mag);
+	piano.draw();
+
+	snowball.update(keyStatus);
+	snowball.draw();
+
+	glPushMatrix();
+	glTranslatef(-1024, 0.0f, -480.0f);
+	glBegin(GL_LINES);
+	glColor3ub(45, 89, 172);
 
 	for (uint32_t i = 0; i < N_FFT; ++i) {
 		if (i == N_FFT >> 1) {
-			glColor3f(100 / 255.f, 52 / 255.f, 158 / 255.f);
+			glColor3ub(100, 52, 158);
 		}
-		glVertex3f(i/4, 0.f, 0.f);
-		glVertex3f(i/4, 4 * mag_smoothed[i], 0.f);
+		glVertex3f(i, 0.f, 0.f);
+		glVertex3f(i, 4 * mag_smoothed[i], 0.f);
 	}
 
 	glEnd();
 	glPopMatrix();
 	
 
-
 	glPopMatrix();
 
 	for (auto it = fireworks.begin(); it != fireworks.end(); ++it) {
 		(*it).draw();
 	}
-	/*
-	glPushMatrix(); // Save the matrix state and perform rotations
-		glTranslatef(0.0f, 0.f, 0.0f);
-		glRotatef(xRot, 1.0f, 0.0f, 0.0f);
-		glRotatef(yRot, 0.0f, 1.0f, 0.0f);
 
-		for (int i = 0; i < 100; ++i) {
-			for (int j = 0; j < 36; ++j) {
-				ballMatrix[i][j].drawForMatrix();
-			}
-		}
-
-	glPopMatrix(); // Restore the matrix state
-*/
-	glPushMatrix(); // Save the matrix state and perform rotations
-		glTranslatef(-300.0f, 250.0f, 0.f);
-		glRotatef(xRot, 1.0f, 0.0f, 0.0f);
-		glRotatef(yRot, 0.0f, 1.0f, 0.0f);
-		glColor3f(0.0f, 0.5f, 1.0f);
-		glutSolidTeacup(90); // draw a wireframe teapot
-	glPopMatrix(); // Restore the matrix state
 	glutSwapBuffers();
 }
 
@@ -822,9 +560,11 @@ int main(int argc, char* argv[]) {
 
 	//test_fft();
 
-	loadWav("D:\\CloudMusic\\Cheetah Mobile Games - The Spring.wav", wav);
+	loadWav("music/The Winter.wav", wav);
 	printMeta(wav);
 
+	piano.init(N_FFT, wav.sampleRate);
+	snowball.setPiano(&piano);
 
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
@@ -834,92 +574,30 @@ int main(int argc, char* argv[]) {
 	glutDisplayFunc(RenderScene);
 	glutTimerFunc(timeIncreasemet, timerCallback, 1);
 	glutReshapeFunc(ChangeSize);
-	glutSpecialFunc(specialKeyCallback);
 	glutKeyboardFunc(keyboardCallback);
-
-	/*
-	glClearColor(0.0, 0.0, 0.0, 0.0);
-	glColor3f(0.0, 0.0, 0.0);
-	glLoadIdentity();
-	glMatrixMode(GL_PROJECTION);
-	glFrustum(-640, 640, -360, 360, 400, 2500);*/
+	glutSpecialFunc(specialKeyCallback);
+	glutSpecialUpFunc(specialKeyUpCallback);
 
 	SetupRC();
 
-	//打开抗锯齿功能
-	//1.开启混合功能
 	glEnable(GL_BLEND);
-
-	//2.指定混合因子
-	//注意:如果你修改了混合方程式,当你使用混合抗锯齿功能时,请一定要改为默认混合方程式
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-	//3.开启对点\线\多边形的抗锯齿功能
 	glEnable(GL_POINT_SMOOTH);
 	glEnable(GL_LINE_SMOOTH);
 	glEnable(GL_POLYGON_SMOOTH);
-
 	glEnable(GLUT_MULTISAMPLE);
 
-	for (int i = 0; i < 100; ++i) {
-		for (int j = 0; j < 36; ++j) {
-			ballMatrix[i][j].setCenter(-495 + i * 10, -175 + j * 10);
-			ballMatrix[i][j].setRadius(5.f);
-			ballMatrix[i][j].weight = getRandf(2) - 1;
-		}
-	}
 
 	for (uint32_t i = 0; i < N_FFT; ++i) {
 		w_hanning[i] = 0.5 - 0.5 * cosf(2 * PI * i / N_FFT);
 	}
-
-	int positions[12] = { 0, 65, 70, 135, 140, 210, 275, 280, 345, 350, 415, 420};
-	PianoKey::pianoKeyShape_t shapes[12] = {
-		PianoKey::L_SHAPE,		// C
-		PianoKey::BLACK_SHAPE,	// C#
-		PianoKey::TU_SHAPE,		// D
-		PianoKey::BLACK_SHAPE,	// D#
-		PianoKey::INV_L_SHAPE,	// E
-
-		PianoKey::L_SHAPE,		// F
-		PianoKey::BLACK_SHAPE,	// F#
-		PianoKey::TU_SHAPE,		// G
-		PianoKey::BLACK_SHAPE,	// G#
-		PianoKey::TU_SHAPE,		// A
-		PianoKey::BLACK_SHAPE,	// A#
-		PianoKey::INV_L_SHAPE,	// B
-	};
-
-	for (int32_t i = 0; i < 36; ++i) {
-
-		//if (i % 12 == 0) {
-		//	glPushMatrix();
-		//	glTranslatef(i / 12 * 520, 0, 0);
-		//}
-
-		pianoKeys[i].initBpf(
-			440 * powf(2.f, (i - 10) / 12.f),
-			440 * powf(2.f, (i - 9) / 12.f),
-			440 * powf(2.f, (i - 8) / 12.f),
-			N_FFT, wav.sampleRate);
-		
-		pianoKeys[i].initPianoKey(positions[i % 12], 0, shapes[i % 12]);
-		pianoKeys[i].cx += i / 12 * 520;
-
-		if (i % 12 == 0 || i % 12 == 2 || i % 12 == 4 || i % 12 == 5 || i % 12 == 7 || i % 12 == 9 || i % 12 == 11)
-			pianoKeys[i].setColor3b(240, 240, 240);
-		else {
-			pianoKeys[i].setColor3b(50, 65, 125);
-		}
-	}
-
 
 	srand(time(NULL));//设置随机数种子，使每次产生的随机序列不同
 
 	ma_device_config config = ma_device_config_init(ma_device_type_playback);
 	config.playback.format = ma_format_s16;   // Set to ma_format_unknown to use the device's native format.
 	config.playback.channels = 2;               // Set to 0 to use the device's native channel count.
-	config.sampleRate = 48000;           // Set to 0 to use the device's native sample rate.
+	config.sampleRate = wav.sampleRate;           // Set to 0 to use the device's native sample rate.
 	config.dataCallback = data_callback;   // This function will be called when miniaudio needs more data.
 	config.pUserData = &wav;   // Can be accessed from the device object (device.pUserData).
 

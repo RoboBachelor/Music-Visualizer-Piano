@@ -161,6 +161,8 @@
   <ItemGroup>
     <ClInclude Include="fft.h" />
     <ClInclude Include="miniaudio.h" />
+    <ClInclude Include="Piano.h" />
+    <ClInclude Include="SnowBall.h" />
     <ClInclude Include="wav.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
