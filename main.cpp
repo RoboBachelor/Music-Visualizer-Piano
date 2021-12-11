@@ -62,13 +62,14 @@ public:
 	} point_t;
 
 
-	pianoKeyShape_t shape;
+	pianoKeyShape_t shape = NORMAL_SHAPE;
 	float fL, f0, fH;	// Lower corner, center higher corner freq
 	float cx, cz;
 	float w = 60, l = 150;
 	float ws = 20, ls = 60;
-	uint8_t r, g, b;
+	uint8_t r = 127, g = 127, b = 127;
 	float height = 0;
+	float vh = 0;
 	std::vector<point_t> pts;
 
 	void initBpf(float fl, float fp, float fh, uint32_t n_fft, uint32_t sampleFreq) {
@@ -133,6 +134,7 @@ public:
 
 	float update(float mag[]) {
 		float h_observed = 0.f;
+		float last_height = height;
 		uint32_t fld = ceilf(fL);
 		uint32_t fhd = ceilf(fH);
 		for (uint32_t i = fld; i < fhd; ++i) {
@@ -150,6 +152,7 @@ public:
 			height = smoothUp * h_observed + (1 - smoothUp) * height;
 		else
 			height = smoothDown * h_observed + (1 - smoothDown) * height;
+		vh = height - last_height;
 
 		return height;
 	}
@@ -178,14 +181,11 @@ public:
 		switch (shape) {
 		case NORMAL_SHAPE:
 		case BLACK_SHAPE:
-			glBegin(GL_POLYGON);
+			glBegin(GL_QUADS);
 			for (int i = 0; i < pts.size(); ++i) {
 				glNormal3f(0, -1, 0);
 				glVertex3f(pts[i].x, 0, pts[i].z);
 			}
-			glEnd();
-
-			glBegin(GL_POLYGON);
 			for (int i = 0; i < pts.size(); ++i) {
 				glNormal3f(0, 1, 0);
 				glVertex3f(pts[i].x, height, pts[i].z);
@@ -198,41 +198,30 @@ public:
 			glBegin(GL_QUADS);
 			glNormal3f(0, -1, 0);
 			glVertex3f(0, 0, ls);
-			glNormal3f(0, -1, 0);
 			glVertex3f(0, 0, l);
-			glNormal3f(0, -1, 0);
 			glVertex3f(w, 0, l);
-			glNormal3f(0, -1, 0);
 			glVertex3f(w, 0, ls);
 
 			glNormal3f(0, -1, 0);
 			glVertex3f(w1, 0, 0);
-			glNormal3f(0, -1, 0);
 			glVertex3f(w1, 0, ls);
-			glNormal3f(0, -1, 0);
 			glVertex3f(w2, 0, ls);
-			glNormal3f(0, -1, 0);
 			glVertex3f(w2, 0, 0);
 
 			glNormal3f(0, 1, 0);
 			glVertex3f(0, height, ls);
-			//glNormal3f(0, 1, 0);
 			glVertex3f(0, height, l);
-			//glNormal3f(0, 1, 0);
 			glVertex3f(w, height, l);
-			//glNormal3f(0, 1, 0);
 			glVertex3f(w, height, ls);
 
 			glNormal3f(0, 1, 0);
 			glVertex3f(w1, height, 0);
-			//glNormal3f(0, 1, 0);
 			glVertex3f(w1, height, ls);
-			//glNormal3f(0, 1, 0);
 			glVertex3f(w2, height, ls);
-			//glNormal3f(0, 1, 0);
 			glVertex3f(w2, height, 0);
 
 			glEnd();
+			break;
 		}
 
 
@@ -246,11 +235,8 @@ public:
 			nx /= norm; nz /= norm;
 			glNormal3f(nx, 0, nz);
 			glVertex3f(pts[i].x, 0, pts[i].z);
-			//glNormal3f(nx, 0, nz);
 			glVertex3f(pts[nextIndex].x, 0, pts[nextIndex].z);
-			//glNormal3f(nx, 0, nz);
 			glVertex3f(pts[nextIndex].x, height, pts[nextIndex].z);
-			//glNormal3f(nx, 0, nz);
 			glVertex3f(pts[i].x, height, pts[i].z);
 			glEnd();
 		}
@@ -638,7 +624,17 @@ void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uin
 	// In playback mode copy data to pOutput. In capture mode read data from pInput. In full-duplex mode, both
 	// pOutput and pInput will be valid and you can move data from pInput into pOutput. Never process more than
 	// frameCount frames.
-	memcpy(pOutput, &wav.sample[sampleIndex], (size_t)frameCount * wav.blockAlign);
+
+	if (sampleIndex >= wav.numSamples)
+		return;
+
+	if (sampleIndex + frameCount > wav.numSamples) {
+		size_t frameAvailable = wav.numSamples - sampleIndex;
+		memcpy(pOutput, &wav.sample[sampleIndex], frameAvailable * wav.blockAlign);
+	}
+	else {
+		memcpy(pOutput, &wav.sample[sampleIndex], (size_t)frameCount * wav.blockAlign);
+	}
 	sampleIndex += frameCount;
 }
 
@@ -719,6 +715,9 @@ void RenderScene(void) {
 	for (int32_t i = 0; i < N_FFT; ++i) {
 		if (i + cur_index >= 0 && i + cur_index < wav.numSamples) {
 			values[i] = wav.sample[i + cur_index].L / 32768.f * w_hanning[i];
+		}
+		else {
+			values[i] = 0;
 		}
 	}
 
@@ -823,7 +822,7 @@ int main(int argc, char* argv[]) {
 
 	//test_fft();
 
-	loadWav("D:\\CloudMusic\\Cheetah Mobile Games - The Time.wav", wav);
+	loadWav("D:\\CloudMusic\\Cheetah Mobile Games - The Spring.wav", wav);
 	printMeta(wav);
 
 
