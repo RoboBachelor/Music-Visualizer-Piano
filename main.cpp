@@ -564,7 +564,6 @@ int main(int argc, char* argv[]) {
 	printMeta(wav);
 
 	piano.init(N_FFT, wav.sampleRate);
-	snowball.setPiano(&piano);
 
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
@@ -587,6 +586,10 @@ int main(int argc, char* argv[]) {
 	glEnable(GL_POLYGON_SMOOTH);
 	glEnable(GLUT_MULTISAMPLE);
 
+	//glEnable(GL_TEXTURE_2D);
+
+	snowball.setPiano(&piano);
+	snowball.loadSnow("texture/snow.bmp");
 
 	for (uint32_t i = 0; i < N_FFT; ++i) {
 		w_hanning[i] = 0.5 - 0.5 * cosf(2 * PI * i / N_FFT);

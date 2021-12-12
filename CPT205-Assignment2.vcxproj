@@ -154,6 +154,7 @@
     <ClCompile Include="miniaudio_test2.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="texture.cpp" />
     <ClCompile Include="wav.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
     </ClCompile>
@@ -163,6 +164,7 @@
     <ClInclude Include="miniaudio.h" />
     <ClInclude Include="Piano.h" />
     <ClInclude Include="SnowBall.h" />
+    <ClInclude Include="texture.h" />
     <ClInclude Include="wav.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

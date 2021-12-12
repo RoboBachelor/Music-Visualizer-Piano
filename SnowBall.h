@@ -3,6 +3,7 @@
 #define FREEGLUT_STATIC
 #include <GL/freeglut.h>
 #include "Piano.h"
+#include "texture.h"
 
 typedef enum {
 	SNOWBALL_FLYING = 0,
@@ -23,6 +24,7 @@ public:
 	float goundFFactor = 1000.f;
 	float maxAccel = 2000.f;
 
+	texture_t snowTexture;
 	Piano* piano;
 
 	void setPiano(Piano* piano) {
@@ -37,6 +39,11 @@ public:
 
 	void setRadius(float radius) {
 		this->radius = radius;
+	}
+
+	void loadSnow(const char imgPath[]) {
+		loadBmp(imgPath, &snowTexture);
+		loadTexture(&snowTexture);
 	}
 
 	void update(bool keyStatus[]) {
@@ -79,8 +86,26 @@ public:
 				fx = -vx / v_mag;
 				fz = -vz / v_mag;
 			}
-			float ax = (vx == 0 ? pwrx : pwrx / abs(vx)) + goundFFactor * fx;
-			float az = (vz == 0 ? pwrz : pwrz / abs(vz)) + goundFFactor * fz;
+			float ax = (vx == 0 ? pwrx : pwrx / abs(vx));
+			if (goundFFactor * fx > 0 && goundFFactor * fx - vx > 0) {
+				ax -= vx;
+			}
+			else if (goundFFactor * fx < 0 && goundFFactor * fx - vx < 0) {
+				ax -= vx;
+			}
+			else {
+				ax += goundFFactor * fx;
+			}
+			float az = (vz == 0 ? pwrz : pwrz / abs(vz));
+			if (goundFFactor * fz > 0 && goundFFactor * fz - vz > 0) {
+				az -= vz;
+			}
+			else if (goundFFactor * fz < 0 && goundFFactor * fz - vz < 0) {
+				az -= vz;
+			}
+			else {
+				az += goundFFactor * fz;
+			}
 			if (ax > maxAccel) ax = maxAccel;
 			if (ax < -maxAccel) ax = -maxAccel;
 			if (az > maxAccel) az = maxAccel;
@@ -107,10 +132,22 @@ public:
 
 	void draw(void) {
 		glPushMatrix();
-		glColor3ub(240, 240, 240);
+		glColor3ub(255, 255, 255);
 		glTranslatef(cx, lowerHeight + radius, cz);
-		GLUquadric* quad = gluNewQuadric();
-		gluSphere(quad, radius, 100, 20);
+		glRotatef(90, 1, 0, 0);
+		glRotatef(90, 0, 1, 0);
+		glEnable(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, snowTexture.textureId);
+		GLUquadric* quadricObj = gluNewQuadric(); // Create a quadric surface object
+		gluQuadricTexture(quadricObj, GL_TRUE); // Set texture mode to true
+		gluSphere(quadricObj, radius, 100, 20);
+		gluDeleteQuadric(quadricObj); // object must be deleted or it will be created every call of the
+		glDisable(GL_TEXTURE_2D);
 		glPopMatrix();
 	}
+
+	~SnowBall() {
+		;
+	}
+
 };
