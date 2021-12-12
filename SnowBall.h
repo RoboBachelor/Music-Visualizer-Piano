@@ -20,9 +20,8 @@ public:
 
 	float keyAccel = 30.f;
 	float airResistance = 1.0f;
-	float goundPMax = 500000.f;
-	float goundFFactor = 1000.f;
-	float maxAccel = 2000.f;
+	float goundVMax = 400.f;
+	float goundVFactor = expf(-1 / 8.f);
 
 	texture_t snowTexture;
 	Piano* piano;
@@ -47,7 +46,6 @@ public:
 	}
 
 	void update(bool keyStatus[]) {
-
 		//vx += -2.5f + getRandf(5.f);
 		//vy += -2.5f + getRandf(5.f);
 
@@ -74,44 +72,14 @@ public:
 		vy -= 1500 * period / 1000;
 
 		if (mode == SNOWBALL_GROUND) {
-			float pwrx = 0, pwrz = 0;
-			pwrx += keyStatus[3] ? goundPMax : 0;
-			pwrx -= keyStatus[2] ? goundPMax : 0;
-			pwrz -= keyStatus[0] ? goundPMax : 0;
-			pwrz += keyStatus[1] ? goundPMax : 0;
+			float vxs = 0, vzs = 0;
+			vxs += keyStatus[3] ? goundVMax : 0;
+			vxs -= keyStatus[2] ? goundVMax : 0;
+			vzs -= keyStatus[0] ? goundVMax : 0;
+			vzs += keyStatus[1] ? goundVMax : 0;
 
-			float v_mag = sqrtf(vx * vx + vz * vz);
-			float fx = 0, fz = 0;
-			if (v_mag != 0) {
-				fx = -vx / v_mag;
-				fz = -vz / v_mag;
-			}
-			float ax = (vx == 0 ? pwrx : pwrx / abs(vx));
-			if (goundFFactor * fx > 0 && goundFFactor * fx - vx > 0) {
-				ax -= vx;
-			}
-			else if (goundFFactor * fx < 0 && goundFFactor * fx - vx < 0) {
-				ax -= vx;
-			}
-			else {
-				ax += goundFFactor * fx;
-			}
-			float az = (vz == 0 ? pwrz : pwrz / abs(vz));
-			if (goundFFactor * fz > 0 && goundFFactor * fz - vz > 0) {
-				az -= vz;
-			}
-			else if (goundFFactor * fz < 0 && goundFFactor * fz - vz < 0) {
-				az -= vz;
-			}
-			else {
-				az += goundFFactor * fz;
-			}
-			if (ax > maxAccel) ax = maxAccel;
-			if (ax < -maxAccel) ax = -maxAccel;
-			if (az > maxAccel) az = maxAccel;
-			if (az < -maxAccel) az = -maxAccel;
-			vx += ax * period / 1000;
-			vz += az * period / 1000;
+			vx = goundVFactor * vx + (1 - goundVFactor) * vxs;
+			vz = goundVFactor * vz + (1 - goundVFactor) * vzs;
 		}
 
 		if (mode == SNOWBALL_FLYING) {
