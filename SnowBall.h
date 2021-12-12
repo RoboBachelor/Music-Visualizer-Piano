@@ -18,8 +18,8 @@ public:
 	float period = 16.f;
 	snowball_mode_t mode = SNOWBALL_FLYING;
 
-	float keyAccel = 30.f;
-	float airResistance = 1.0f;
+	float keyAccel = 20.f;
+	float airResistance = 1.9f;
 	float goundVMax = 400.f;
 	float goundVFactor = expf(-1 / 8.f);
 
@@ -60,7 +60,7 @@ public:
 		if (result.crashed) {
 			lowerHeight = result.height;
 			vy = result.vHeight;
-			mode = SNOWBALL_GROUND;
+			mode = vy > 0? SNOWBALL_FLYING : SNOWBALL_GROUND;
 		}
 		else if (lowerHeight < 0) {
 			lowerHeight = 0;
@@ -68,8 +68,14 @@ public:
 			mode = SNOWBALL_GROUND;
 		}
 
+		// Space key is pressed, Jump!
+		if (keyStatus[4]) {
+			vy = 1000.f;
+			mode = SNOWBALL_FLYING;
+		}
+
 		// Gravity acceleration.
-		vy -= 1500 * period / 1000;
+		vy -= 2500 * period / 1000;
 
 		if (mode == SNOWBALL_GROUND) {
 			float vxs = 0, vzs = 0;

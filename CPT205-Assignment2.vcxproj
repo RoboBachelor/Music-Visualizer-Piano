@@ -161,6 +161,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="fft.h" />
+    <ClInclude Include="Firework.h" />
     <ClInclude Include="miniaudio.h" />
     <ClInclude Include="Piano.h" />
     <ClInclude Include="SnowBall.h" />
