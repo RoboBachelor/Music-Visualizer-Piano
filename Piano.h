@@ -12,6 +12,9 @@
 
 #include "wav.h"
 
+// in main.c
+void writeWave(float freq, float during);
+
 typedef enum {
 	NORMAL_SHAPE = 0,
 	L_SHAPE,
@@ -38,7 +41,7 @@ public:
 	float w = 60, l = 150;
 	float ws = 20, ls = 60;
 	uint8_t r = 127, g = 127, b = 127;
-	float height = 0;
+	float height = 0.01;
 	float vh = 0;
 	std::vector<point_t> pts;
 	float smoothUp = 0.9, smoothDown = 0.04;
@@ -130,8 +133,11 @@ public:
 			height = smoothUp * h_observed + (1 - smoothUp) * height;
 		else
 			height = smoothDown * h_observed + (1 - smoothDown) * height;
-		vh = height - last_height;
 
+		if (height < 0.05f)
+			height = 0.05f;
+
+		vh = height - last_height;
 		return height;
 	}
 
@@ -226,6 +232,7 @@ public:
 class Piano {
 public:
 	PianoKey pianoKeys[36];
+	bool keyStatus[36] = { false };
 
 	float cx = -750, cz = -120;
 	float w = 60, l = 180, ws = 20, ls = 60;
@@ -308,6 +315,7 @@ public:
 		px -= cx;
 		pz -= cz;
 		if (px < 0 || px >= wGroup * 3 || pz < 0 || pz > l) {
+			memset(keyStatus, 0, sizeof(keyStatus));
 			return ret;
 		}
 
@@ -315,6 +323,7 @@ public:
 		int groupIndex = floorf(px / wGroup);
 		px -= wGroup * groupIndex;
 		if (px >= wGrid * 7) {
+			memset(keyStatus, 0, sizeof(keyStatus));
 			return ret;
 		}
 
@@ -333,13 +342,58 @@ public:
 		int keyIndex = isBlockKey ? blackIndexToKeyIndex[blackIndex] : whiteIndexToKeyIndex[whiteIndex];
 		keyIndex += 12 * groupIndex;
 		if (height > pianoKeys[keyIndex].height) {
+			memset(keyStatus, 0, sizeof(keyStatus));
 			return ret;
 		}
 		else {
 			ret.crashed = true;
 			ret.height = pianoKeys[keyIndex].height;
 			ret.vHeight = pianoKeys[keyIndex].vh;
+
+			if (!keyStatus[keyIndex]) {
+				writeWave(440 * powf(2.f, (keyIndex - 9) / 12.f), 2.f);
+			}
+			memset(keyStatus, 0, sizeof(keyStatus));
+			keyStatus[keyIndex] = true;
+
 			return ret;
 		}
+	}
+
+	void mouseInteractive(float px, float pz) {
+
+		float bias = 1.f;
+
+		// Out of the piano area, return false
+		px -= cx;
+		pz -= cz;
+		if (px < 0 || px >= wGroup * 3 || pz < 0 - bias || pz > l + bias) {
+			return;
+		}
+
+		// In the group gap, return false
+		int groupIndex = floorf(px / wGroup);
+		px -= wGroup * groupIndex;
+		if (px >= wGrid * 7) {
+			return;
+		}
+
+		int whiteIndex = floorf(px / wGrid);
+		bool isBlockKey = false;
+		int blackIndex;
+
+		// May be on the black keys
+		if (pz < ls) {
+			blackIndex = roundf(px / wGrid);
+			if (blackIndexToKeyIndex[blackIndex]) {
+				if (fabsf(px - blackIndex * wGrid) < ws) {
+					isBlockKey = true;
+				}
+			}
+		}
+		int keyIndex = isBlockKey ? blackIndexToKeyIndex[blackIndex] : whiteIndexToKeyIndex[whiteIndex];
+		keyIndex += 12 * groupIndex;
+
+		writeWave(440 * powf(2.f, (keyIndex - 9) / 12.f), 2.f);
 	}
 };

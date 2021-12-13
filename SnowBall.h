@@ -22,6 +22,7 @@ public:
 	float airResistance = 1.9f;
 	float goundVMax = 400.f;
 	float goundVFactor = expf(-1 / 8.f);
+	float vJumping = 1250.f;
 
 	texture_t snowTexture;
 	Piano* piano;
@@ -60,7 +61,7 @@ public:
 		if (result.crashed) {
 			lowerHeight = result.height;
 			vy = result.vHeight;
-			mode = vy > 0? SNOWBALL_FLYING : SNOWBALL_GROUND;
+			mode = SNOWBALL_GROUND;
 		}
 		else if (lowerHeight < 0) {
 			lowerHeight = 0;
@@ -69,15 +70,18 @@ public:
 		}
 
 		// Space key is pressed, Jump!
-		if (keyStatus[4]) {
-			vy = 1000.f;
+		if (keyStatus[4] && mode == SNOWBALL_GROUND) {
+			vy += vJumping;
+			mode = SNOWBALL_FLYING;
+		}
+		if (vy > 0) {
 			mode = SNOWBALL_FLYING;
 		}
 
 		// Gravity acceleration.
 		vy -= 2500 * period / 1000;
 
-		if (mode == SNOWBALL_GROUND) {
+		if (mode == SNOWBALL_GROUND || mode == SNOWBALL_FLYING) {
 			float vxs = 0, vzs = 0;
 			vxs += keyStatus[3] ? goundVMax : 0;
 			vxs -= keyStatus[2] ? goundVMax : 0;
@@ -88,7 +92,7 @@ public:
 			vz = goundVFactor * vz + (1 - goundVFactor) * vzs;
 		}
 
-		if (mode == SNOWBALL_FLYING) {
+		else if (mode == SNOWBALL_FLYING) {
 			vx += keyStatus[3] ? keyAccel : 0;
 			vx -= keyStatus[2] ? keyAccel : 0;
 			vz -= keyStatus[0] ? keyAccel : 0;
@@ -118,6 +122,20 @@ public:
 		gluDeleteQuadric(quadricObj); // object must be deleted or it will be created every call of the
 		glDisable(GL_TEXTURE_2D);
 		glPopMatrix();
+
+		glBegin(GL_POLYGON);
+		glColor4f(0.5, 0.5, 0.5, 0.8);
+		glVertex3f(cx, 0.1f, cz);
+		glColor4f(0.5, 0.5, 0.5, 0.4);
+		// Draw the circle
+		int samplingNumber = 50;
+		for (int i = 0; i <= samplingNumber; ++i) {
+			glVertex3f(cx + radius * cosf(2 * PI * i / samplingNumber), 0.1f,
+				cz + radius * sinf(2 * PI * i / samplingNumber));
+		}
+
+		glEnd();
+
 	}
 
 	~SnowBall() {

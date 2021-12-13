@@ -45,10 +45,79 @@ Piano piano;
 SnowBall snowball;
 std::list<Firework> fireworks;
 
+bool freeMode = false;
+sample_16b_2ch_t* playerBuf;
+int32_t playerBufLen;
+int32_t playerBufIndex = 0;
+
+#include <mutex>          // std::mutex
+std::mutex mtx;           // mutex for critical section
+
+void writeWave(float freq, float during) {
+	if (!freeMode)
+		return;
+	mtx.lock();
+	int duringSample = during * wav.sampleRate;
+	int curIndex = playerBufIndex;
+	for (int i = 0; i < duringSample; ++i) {
+		if (i == 1000)
+			mtx.unlock();
+		int value = playerBuf[curIndex].L + 10000 * sinf(2 * PI * freq * i / wav.sampleRate) * exp(-7.f * i / duringSample);
+		if (value >= 32768) value = 32767;
+		if (value < -32768) value = -32768;
+		playerBuf[curIndex].L = playerBuf[curIndex].R = (int16_t)value;
+		if (++curIndex >= playerBufLen) {
+			curIndex = 0;
+		}
+	}
+	mtx.unlock();
+}
+
+
+void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount)
+{
+	// In playback mode copy data to pOutput. In capture mode read data from pInput. In full-duplex mode, both
+	// pOutput and pInput will be valid and you can move data from pInput into pOutput. Never process more than
+	// frameCount frames.
+
+	if (freeMode) {
+		mtx.lock();
+		int size1 = playerBufLen - playerBufIndex;
+		if (size1 >= frameCount) {
+			memcpy(pOutput, &playerBuf[playerBufIndex], frameCount * wav.blockAlign);
+			memset(&playerBuf[playerBufIndex], 0, frameCount * wav.blockAlign);
+			playerBufIndex += frameCount;
+		}
+		else {
+			memcpy(pOutput, &playerBuf[playerBufIndex], size1 * wav.blockAlign);
+			memset(&playerBuf[playerBufIndex], 0, size1 * wav.blockAlign);
+			int size2 = frameCount - size1;
+			memcpy((sample_16b_2ch_t*)pOutput + size1, playerBuf, size2 * wav.blockAlign);
+			memset(playerBuf, 0, size2 * wav.blockAlign);
+			playerBufIndex = size2;
+		}
+		mtx.unlock();
+	}
+	else {
+		// Copy the next piece of the music PCM data.
+		if (sampleIndex + frameCount > wav.numSamples) {
+			size_t frameAvailable = wav.numSamples - sampleIndex;
+			memcpy(pOutput, &wav.sample[sampleIndex], frameAvailable * wav.blockAlign);
+			freeMode = true;
+		}
+		else {
+			memcpy(pOutput, &wav.sample[sampleIndex], (size_t)frameCount * wav.blockAlign);
+		}
+		sampleIndex += frameCount;
+	}
+}
+
 // Change the view volume and viewport. This is called when the window is resized.
 void reshapeCallback(int w, int h) {
 	// Set viewport to window dimensions
 	glViewport(0, 0, w, h);
+	window_width = w;
+	window_height = h;
 }
 
 // Setting up lighting and material parameters for enhanced rendering effect.
@@ -74,6 +143,35 @@ void SetupRC() {
 	// Set material properties to follow glColor values
 	glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE);
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Black background
+}
+
+
+void mouseCallback(int button, int state, int x, int y){
+	if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+		if (!freeMode)
+			return;
+		GLint viewport[4];
+		GLdouble mvmatrix[16], projmatrix[16];
+		GLfloat winx, winy, winz;
+		GLdouble posx, posy, posz;
+
+		glPushMatrix();
+
+		//glScalef(0.1, 0.1, 0.1);
+		glGetIntegerv(GL_VIEWPORT, viewport);			/* 获取三个矩阵 */
+		glGetDoublev(GL_MODELVIEW_MATRIX, mvmatrix);
+		glGetDoublev(GL_PROJECTION_MATRIX, projmatrix);
+
+		glPopMatrix();
+
+		winx = x;
+		winy = window_height - y;
+
+		glReadPixels((int)winx, (int)winy, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &winz);			/* 获取深度 */
+		gluUnProject(winx, winy, winz, mvmatrix, projmatrix, viewport, &posx, &posy, &posz);	/* 获取三维坐标 */
+
+		piano.mouseInteractive(posx, posz);
+	}
 }
 
 
@@ -170,25 +268,6 @@ void timerCallback(int value) {
 	glutTimerFunc(timeIncreasemet, timerCallback, value + 1);
 }
 
-void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount)
-{
-	// In playback mode copy data to pOutput. In capture mode read data from pInput. In full-duplex mode, both
-	// pOutput and pInput will be valid and you can move data from pInput into pOutput. Never process more than
-	// frameCount frames.
-
-	if (sampleIndex >= wav.numSamples)
-		return;
-
-	if (sampleIndex + frameCount > wav.numSamples) {
-		size_t frameAvailable = wav.numSamples - sampleIndex;
-		memcpy(pOutput, &wav.sample[sampleIndex], frameAvailable * wav.blockAlign);
-	}
-	else {
-		memcpy(pOutput, &wav.sample[sampleIndex], (size_t)frameCount * wav.blockAlign);
-	}
-	sampleIndex += frameCount;
-}
-
 // Draw scene
 void RenderScene(void) {
 
@@ -202,10 +281,10 @@ void RenderScene(void) {
 
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	gluPerspective(60.0, 16/9., 4, 2000.0);
+	gluPerspective(45.0, 16/9., 4, 2000.0);
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
-	gluLookAt(0, 100, 800, 0, -200.f, 0, 0, 1, 0);
+	gluLookAt(0, 200, 1200, 0, -200.f, 0, 0, 1, 0);
 	//gluPerspective()
 
 	// Draw the blue-white background
@@ -271,10 +350,14 @@ void RenderScene(void) {
 
 int main(int argc, char* argv[]) {
 
-	//test_fft();
-
-	loadWav("music/The Winter.wav", wav);
+	wav.sampleRate = 48000;
+	wav.blockAlign = 4;
+	loadWav("music/The pia1no.wav", wav);
 	printMeta(wav);
+
+	playerBufLen = wav.sampleRate * 6;
+	playerBuf = new sample_16b_2ch_t[playerBufLen];
+	memset(playerBuf, 0, playerBufLen * wav.blockAlign);
 
 	piano.init(N_FFT, wav.sampleRate);
 
@@ -290,6 +373,7 @@ int main(int argc, char* argv[]) {
 	glutKeyboardUpFunc(keyboardUpCallback);
 	glutSpecialFunc(specialKeyCallback);
 	glutSpecialUpFunc(specialKeyUpCallback);
+	glutMouseFunc(mouseCallback);
 
 	SetupRC();
 
@@ -328,6 +412,6 @@ int main(int argc, char* argv[]) {
 	glutMainLoop();
 
 	ma_device_uninit(&device);    // This will stop the device so no need to do that manually.
+	delete[] playerBuf;
 	return 0;
 }
-
