@@ -388,7 +388,7 @@ int main(int argc, char* argv[]) {
 	wav.sampleRate = 48000;
 	wav.blockAlign = 4;
 
-	char musicPath[200] = "The Music Visualizer - Free Mode";
+	char musicPath[200] = { "The Music Visualizer - Free Mode" };
 
 	if (argc > 1) {
 		strcpy_s(musicPath, argv[1]);
