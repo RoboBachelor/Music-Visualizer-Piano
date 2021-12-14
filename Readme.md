@@ -2,7 +2,7 @@
 
 This is a coursework project of CPT205 Computer Graphics Assignment2: 3D Modeling Project, Xi'an Jiaotong-Liverpool University.
 
-![Cover](C:\Users\kexue\Desktop\CPT205\CPT205-Assignment2\asset\Cover.png)
+![Cover](asset\Cover.png)
 
 
 
@@ -43,9 +43,9 @@ Audio signal processing is a crucial part of this assignment. Because human is v
 **2.1**    **Music Transcription**
 
 Audio transcription is the practice of notating a piece or a sound in wave format. In simple terms, it is to get the intensity of each musical note (do, re, mi…) at the current time. First, I crop a piece of music which has 2048 samples. The Hanning window function [1] is multiplied to the corresponding samples:
-$$
-w[n]=0.5-0.5 cos⁡(\frac{2πn}{N-1})\quad\quad0≤n<N,N=2048
-$$
+
+![img](asset/hanning.png)
+
 Then the Fast Fourier Transform (FFT) [2], shown in Figure 1(a), is applied to this piece of Hanning weighted data:
 
 ![img](asset/fft_furmula.png)
