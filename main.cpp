@@ -19,6 +19,7 @@
 #include <vector>
 #include <list>
 #include <ctime>
+#include <mutex>          // std::mutex
 
 #include "fft.h"
 #include "wav.h"
@@ -40,6 +41,7 @@ float smoothUp = 0.9, smoothDown = 0.04;
 
 // Up, Down, Left, Right, Space
 bool keyStatus[5] = { false };
+bool paused = false;
 
 Piano piano;
 SnowBall snowball;
@@ -50,19 +52,19 @@ sample_16b_2ch_t* playerBuf;
 int32_t playerBufLen;
 int32_t playerBufIndex = 0;
 
-#include <mutex>          // std::mutex
 std::mutex mtx;           // mutex for critical section
 
 void writeWave(float freq, float during) {
 	if (!freeMode)
 		return;
-	mtx.lock();
 	int duringSample = during * wav.sampleRate;
 	int curIndex = playerBufIndex;
+	if (duringSample <= 1000) return;
+	mtx.lock();
 	for (int i = 0; i < duringSample; ++i) {
 		if (i == 1000)
 			mtx.unlock();
-		int value = playerBuf[curIndex].L + 10000 * sinf(2 * PI * freq * i / wav.sampleRate) * exp(-7.f * i / duringSample);
+		int value = playerBuf[curIndex].L + 12000 * sinf(2 * PI * freq * i / wav.sampleRate) * exp(-7.0f * i / duringSample);
 		if (value >= 32768) value = 32767;
 		if (value < -32768) value = -32768;
 		playerBuf[curIndex].L = playerBuf[curIndex].R = (int16_t)value;
@@ -70,7 +72,6 @@ void writeWave(float freq, float during) {
 			curIndex = 0;
 		}
 	}
-	mtx.unlock();
 }
 
 
@@ -99,6 +100,8 @@ void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uin
 		mtx.unlock();
 	}
 	else {
+		if (paused)
+			return;
 		// Copy the next piece of the music PCM data.
 		if (sampleIndex + frameCount > wav.numSamples) {
 			size_t frameAvailable = wav.numSamples - sampleIndex;
@@ -178,6 +181,9 @@ void mouseCallback(int button, int state, int x, int y){
 void keyboardCallback(unsigned char key, int x, int y) {// keyboard interaction
 	if (key == ' ') {
 		keyStatus[4] = true;
+	}
+	if (key == 'p') {
+		paused = !paused;
 	}
 }
 
@@ -268,6 +274,26 @@ void timerCallback(int value) {
 	glutTimerFunc(timeIncreasemet, timerCallback, value + 1);
 }
 
+void myPerspective(double fovx, double aspect, double zNear, double zFar)
+{
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+
+	double xmin, xmax, ymin, ymax;
+
+	xmax = zNear * tan(fovx * M_PI / 360.0);
+	xmin = -xmax;
+	ymin = xmin / aspect;
+	ymax = xmax / aspect;
+
+	glFrustum(xmin, xmax, ymin, ymax, zNear, zFar);
+
+	glMatrixMode(GL_MODELVIEW);
+	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
+
+	glDepthMask(GL_TRUE);
+}
+
 // Draw scene
 void RenderScene(void) {
 
@@ -281,10 +307,10 @@ void RenderScene(void) {
 
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	gluPerspective(45.0, 16/9., 4, 2000.0);
+	myPerspective(60.0, (double)window_width / window_height, 4, 2500.0);
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
-	gluLookAt(0, 200, 1200, 0, -200.f, 0, 0, 1, 0);
+	gluLookAt(0, 250, 1500, 0, -300.f, 0, 0, 1, 0);
 	//gluPerspective()
 
 	// Draw the blue-white background
@@ -300,6 +326,14 @@ void RenderScene(void) {
 	glVertex3f(+1500, +500, 0.f);
 	glVertex3f(-1500, +500, 0.f);
 	glEnd();
+
+	glBegin(GL_POLYGON);
+	glVertex3f(-1500, +500, 0.f);
+	glVertex3f(+1500, +500, 0.f);
+	glVertex3f(+1500, 2500, 0.f);
+	glVertex3f(-1500, 2500, 0.f);
+	glEnd();
+
 	glPopMatrix();
 
 	// The Ground Coordinate
@@ -312,9 +346,9 @@ void RenderScene(void) {
 	glColor3ub(160, 170, 175);
 	glNormal3f(5/13.f, 12/13.f, 0);
 	glVertex3f(-1500, 0, -500);
-	glVertex3f(-1500, 0, 500);
+	glVertex3f(-1500, 0, 2500);
 	glNormal3f(-5 / 13.f, 12 / 13.f, 0);
-	glVertex3f(+1500, 0, 500);
+	glVertex3f(+1500, 0, 2500);
 	glVertex3f(+1500, 0, -500);
 	glEnd();
 	glPopMatrix();
@@ -350,21 +384,72 @@ void RenderScene(void) {
 
 int main(int argc, char* argv[]) {
 
+	// Default parameters to play the sound
 	wav.sampleRate = 48000;
 	wav.blockAlign = 4;
-	loadWav("music/The pia1no.wav", wav);
-	printMeta(wav);
+
+	char musicPath[200] = "The Music Visualizer - Free Mode";
+
+	if (argc > 1) {
+		strcpy_s(musicPath, argv[1]);
+	}
+
+	/* Load a list of demo musics. Disabled for the copyright reason.
+	else {
+		char musicList[][30] = {
+			"Free Mode - Skip the music",
+			"The Winter.wav",
+			"The Spring.wav",
+			"The Piano.wav",
+			"The Time.wav",
+			"The Ocean.wav",
+		};
+		int musicListLen = sizeof(musicList) / sizeof(musicList[0]);
+		int selectedMusic = 0;
+
+		printf("This is a music related project.\nPlease make sure open your speaker!\n\n");
+		printf("USAGE:\nArrow keys move the snow ball\nSpace key jumps the snow ball.\nMouse can play the piano after th music is finished.\n\n");
+		do {
+			for (int i = 0; i < musicListLen; ++i) {
+				printf("[%d] ", i);
+				std::cout << musicList[i] << std::endl;
+			}
+			printf("Please make sure open your speaker now!\n");
+			printf("Please select a music to play, type [0-%d]: ", musicListLen - 1);
+			scanf_s("%d", &selectedMusic);
+		} while (selectedMusic < 0 || selectedMusic >= musicListLen);
+
+		if(selectedMusic)
+			strcat_s(musicPath, "music/");
+		strcat_s(musicPath, musicList[selectedMusic]);
+	}
+	*/
+
+	ma_decoder decoder;
+	ma_decoder_config decoderConfig = ma_decoder_config_init(ma_format_s16, 2, 0);
+
+	if (ma_decoder_init_file(musicPath, &decoderConfig, &decoder) != MA_SUCCESS) {
+		printf("Can not open wav music file: %s\n", musicPath);
+	}
+	else {
+		wav.sampleRate = decoder.outputSampleRate;
+		wav.numSamples = ma_decoder_get_length_in_pcm_frames(&decoder);
+		wav.sample = new sample_16b_2ch_t[wav.numSamples];
+		ma_decoder_read_pcm_frames(&decoder, wav.sample, wav.numSamples);
+		printMeta(wav);
+	}
+	ma_decoder_uninit(&decoder);
 
 	playerBufLen = wav.sampleRate * 6;
 	playerBuf = new sample_16b_2ch_t[playerBufLen];
-	memset(playerBuf, 0, playerBufLen * wav.blockAlign);
+	memset(playerBuf, 0, (size_t)playerBufLen * wav.blockAlign);
 
 	piano.init(N_FFT, wav.sampleRate);
 
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
 	glutInitWindowSize(window_width, window_height);
-	glutCreateWindow("Music visualizer - The Winter");
+	glutCreateWindow(musicPath);
 
 	glutDisplayFunc(RenderScene);
 	glutTimerFunc(timeIncreasemet, timerCallback, 1);
@@ -384,20 +469,18 @@ int main(int argc, char* argv[]) {
 	glEnable(GL_POLYGON_SMOOTH);
 	glEnable(GLUT_MULTISAMPLE);
 
-	//glEnable(GL_TEXTURE_2D);
-
 	snowball.setPiano(&piano);
 	snowball.loadSnow("texture/snow.bmp");
 
-	for (uint32_t i = 0; i < N_FFT; ++i) {
-		w_hanning[i] = 0.5 - 0.5 * cosf(2 * PI * i / N_FFT);
+	for (int i = 0; i < N_FFT; ++i) {
+		w_hanning[i] = 0.5 - 0.5 * cosf(2 * PI * i / (float)N_FFT);
 	}
 
 	srand(time(NULL));
 
 	ma_device_config config = ma_device_config_init(ma_device_type_playback);
 	config.playback.format = ma_format_s16;   // Set to ma_format_unknown to use the device's native format.
-	config.playback.channels = 2;               // Set to 0 to use the device's native channel count.
+	config.playback.channels = wav.numChannels;   // Set to 0 to use the device's native channel count.
 	config.sampleRate = wav.sampleRate;           // Set to 0 to use the device's native sample rate.
 	config.dataCallback = data_callback;   // This function will be called when miniaudio needs more data.
 	config.pUserData = &wav;   // Can be accessed from the device object (device.pUserData).
@@ -413,5 +496,6 @@ int main(int argc, char* argv[]) {
 
 	ma_device_uninit(&device);    // This will stop the device so no need to do that manually.
 	delete[] playerBuf;
+	freeWav(wav);
 	return 0;
 }

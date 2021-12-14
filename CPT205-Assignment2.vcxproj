@@ -85,6 +85,9 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
+    <IncludePath>C:\Users\kexue\freeglut\include;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\Users\kexue\freeglut\lib;$(LibraryPath)</LibraryPath>
+    <EmbedManifest>false</EmbedManifest>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -141,6 +144,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>freeglut_static.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -150,9 +154,11 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="miniaudio_test.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="miniaudio_test2.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="texture.cpp" />
     <ClCompile Include="wav.cpp">
@@ -164,9 +170,16 @@
     <ClInclude Include="Firework.h" />
     <ClInclude Include="miniaudio.h" />
     <ClInclude Include="Piano.h" />
+    <ClInclude Include="resource.h" />
     <ClInclude Include="SnowBall.h" />
     <ClInclude Include="texture.h" />
     <ClInclude Include="wav.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="CPT205-Assignment2.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="icon1.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

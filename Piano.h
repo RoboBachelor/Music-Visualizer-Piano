@@ -235,7 +235,7 @@ public:
 	bool keyStatus[36] = { false };
 
 	float cx = -750, cz = -120;
-	float w = 60, l = 180, ws = 20, ls = 60;
+	float w = 60, l = 240, ws = 20, ls = 100;
 	float gapGrid = 5, gapGroup = 30;
 	float wGrid = 70, wGroup = 520;
 
