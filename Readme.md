@@ -2,7 +2,7 @@
 
 This is a coursework project of CPT205 Computer Graphics Assignment2: 3D Modeling Project, Xi'an Jiaotong-Liverpool University.
 
-![Cover](asset\Cover.png)
+![Cover](asset/Cover.png)
 
 
 
