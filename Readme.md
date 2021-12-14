@@ -8,11 +8,12 @@ This is a coursework project of CPT205 Computer Graphics Assignment2: 3D Modelin
 
 ## **How to play**: 
 
+Just download in the "Release" area and no need to install.  
 Please make sure to turn on your speaker first!
 
 **Open a music:**
 
-You don't need to install. Drop a music file to the visualizer, or right click a music file and open with the visualizer.
+Drop a music file to the visualizer, or right click a music file and open with the visualizer.
 
 **Overall usage**:
 
@@ -136,5 +137,5 @@ The interaction can be happened between human and the program or between the two
 
 Any questions, problems or suggestions, please contact:
 
-Jingyi Wang
-**E-mail**: Wangjingyi70@gmail.com
+Jingyi Wang  
+E-mail: Wangjingyi70@gmail.com
