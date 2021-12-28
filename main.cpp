@@ -447,7 +447,7 @@ int main(int argc, char* argv[]) {
 	piano.init(N_FFT, wav.sampleRate);
 
 	glutInit(&argc, argv);
-	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
+	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH | GLUT_MULTISAMPLE);
 	glutInitWindowSize(window_width, window_height);
 	glutCreateWindow(musicPath);
 
